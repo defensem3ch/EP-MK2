@@ -14,7 +14,12 @@ a note that is not identical every time you play it.
   GPL-3.0.
 * **EP-MK1 JUCE port** — hand-written C++ reimplementation, verified against the
   Pd patch and against an hvcc/Heavy build of it. Bands agree within 0.1–0.2 dB.
-* **EP-MK2** — this project. Same licence, same lineage, new model.
+* **EP-MK2** — this project, by **defensem3ch**. Same licence and the same
+  lineage, but the model has changed shape: a hammer with a contact time
+  instead of a period, resonators normalised so decay and level are
+  independent, a pickup derived from its geometry that senses dPhi/dt, a
+  measured Q, and a sub-fundamental. The plugin credits its ancestry in its
+  own header.
 
 EP-MK1 stays as it is and remains usable. MK2 is not a replacement for it in
 the sense of a bug-fix release; it is where the model changes shape.

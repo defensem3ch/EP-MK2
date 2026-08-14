@@ -8,12 +8,12 @@ add_subdirectory(JUCE)
 
 juce_add_plugin(EPMK2
     PRODUCT_NAME            "EP-MK2"
-    COMPANY_NAME            "MikeMorenoAudio"
-    BUNDLE_ID               "audio.mikemoreno.epmk2"
-    PLUGIN_MANUFACTURER_CODE Mmno
+    COMPANY_NAME            "defensem3ch"
+    BUNDLE_ID               "audio.defensem3ch.epmk2"
+    PLUGIN_MANUFACTURER_CODE Dfm3
     PLUGIN_CODE             Epm2
     FORMATS                 VST3 LV2 Standalone
-    LV2URI                  "urn:mikemorenoaudio:epmk2"
+    LV2URI                  "urn:defensem3ch:epmk2"
     IS_SYNTH                TRUE
     NEEDS_MIDI_INPUT        TRUE
     NEEDS_MIDI_OUTPUT       FALSE

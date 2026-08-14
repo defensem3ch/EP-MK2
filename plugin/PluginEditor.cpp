@@ -15,6 +15,7 @@ constexpr float kLabelFont   = 15.0f;
 constexpr float kSectionFont = 17.0f;
 constexpr float kTitleFont   = 30.0f;
 constexpr float kValueFont   = 16.0f;
+constexpr float kCreditFont  = 12.0f;
 // Room for two lines of label.
 constexpr int   kLabelHeight = 34;
 constexpr int kPad           = 8;
@@ -168,9 +169,21 @@ void PanelContent::paint(juce::Graphics& g)
     g.setColour(juce::Colour(0xff404040));
     g.fillRect(header);
 
+    auto titleArea = header.reduced(16, 0);
     g.setColour(juce::Colours::white);
     g.setFont(juce::FontOptions(kTitleFont, juce::Font::bold));
-    g.drawText("EP-MK2", header.reduced(16, 0), juce::Justification::centredLeft);
+    const int titleWidth = juce::GlyphArrangement::getStringWidthInt(
+        juce::Font(juce::FontOptions(kTitleFont, juce::Font::bold)), "EP-MK2");
+    g.drawText("EP-MK2", titleArea, juce::Justification::centredLeft);
+
+    // The model is not the one Miguel Moreno wrote, but it descends from it,
+    // and GPL-3 lineage should be visible in the thing itself rather than only
+    // in a licence file nobody opens.
+    g.setColour(juce::Colour(0xff9a9a9a));
+    g.setFont(juce::FontOptions(kCreditFont, juce::Font::bold));
+    g.drawText("after EP-MK1 by Miguel Moreno",
+               titleArea.withTrimmedLeft(titleWidth + 14),
+               juce::Justification::centredLeft);
 
     g.setColour(juce::Colour(0xffb4b4b4));
     g.setFont(juce::FontOptions(kLabelFont, juce::Font::bold));
@@ -256,6 +269,11 @@ EpMk2Editor::EpMk2Editor(EpMk2Processor& p)
     else
         setSize(kDesignWidth, designHeight);
     startTimerHz(10);
+}
+
+EpMk2Editor::~EpMk2Editor()
+{
+    proc.flushSettings();
 }
 
 void EpMk2Editor::timerCallback()

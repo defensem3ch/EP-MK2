@@ -42,11 +42,19 @@ public:
 
     juce::AudioProcessorValueTreeState& getState() noexcept { return state; }
 
-    // The editor's size lives in the same value tree as the parameters, so it
-    // travels with the session automatically -- getStateInformation already
-    // serialises the whole tree.  Returns {0, 0} when nothing has been saved.
+    // Editor size is remembered in two places, and they answer different
+    // questions.  The value tree travels with the session, so reopening a
+    // saved project restores the window it was saved with.  A settings file in
+    // the user's config directory outlives every instance, so *adding a fresh
+    // instance* gets the size last used rather than the factory default --
+    // which the value tree alone cannot do, because a new instance has no
+    // state to restore from.  Session state wins where both exist.
     juce::Point<int> getSavedEditorSize() const;
     void saveEditorSize(int width, int height);
+    // Write the settings file now.  Resizes are batched behind a timer, which
+    // will not have fired if the window is closed or the instance removed
+    // straight after a resize -- which is exactly when it matters.
+    void flushSettings();
 
     bool isBusesLayoutSupported(const BusesProperties&) const { return true; }
 
@@ -55,6 +63,17 @@ private:
     // The pedal can be put down by MIDI CC64 or by the panel toggle, and the
     // two have to be combined rather than one overwriting the other.
     void updatePedal();
+
+    // Shared across every instance in the process, so they do not fight over
+    // the file.
+    struct Settings
+    {
+        Settings();
+        juce::Point<int> editorSize() const;
+        void setEditorSize(int width, int height);
+        juce::ApplicationProperties properties;
+    };
+    juce::SharedResourcePointer<Settings> settings;
 
     juce::AudioProcessorValueTreeState state;
     std::vector<float> lastParamValues;

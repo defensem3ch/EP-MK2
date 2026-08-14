@@ -798,29 +798,56 @@ int main()
     }
 
     // ---- the window remembers its size -----------------------------------
+    // Two different questions, and the first implementation only answered one.
+    // Storing the size in the value tree makes a *saved session* reopen at its
+    // size, but a freshly added instance has no state to restore from and so
+    // fell back to the factory default -- which is exactly what happens when
+    // someone resizes a window, removes the plugin, and adds it again.
     {
         juce::ScopedJuceInitialiser_GUI juceInit;
-        int reopened = 0, defaulted = 0, w = 0, h = 0;
+        int w = 0, h = 0;
         {
             std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
-            // Resize to something other than the default, as a user would.
             w = ed->getWidth() * 5 / 4;
             h = ed->getHeight() * 5 / 4;
             ed->setSize(w, h);
         }
-        // Round-trip the state the way a host saves and reloads a session.
+
+        // 1. A saved session reopens at the size it was saved with.
         juce::MemoryBlock blob;
         proc.getStateInformation(blob);
         proc.setStateInformation(blob.getData(), (int) blob.getSize());
         {
             std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
-            reopened = ed->getWidth();
-            defaulted = ed->getHeight();
+            char d[96];
+            snprintf(d, sizeof d, "  (%d x %d -> %d x %d)",
+                     w, h, ed->getWidth(), ed->getHeight());
+            check(std::abs(ed->getWidth() - w) <= 2 && std::abs(ed->getHeight() - h) <= 2,
+                  "a saved session reopens at its own size", d);
         }
-        char d[96];
-        snprintf(d, sizeof d, "  (%d x %d -> %d x %d)", w, h, reopened, defaulted);
-        check(std::abs(reopened - w) <= 2 && std::abs(defaulted - h) <= 2,
-              "the editor reopens at the size it was left", d);
+
+        // 2. A brand new instance, with no state at all, opens at the size the
+        //    last one was left -- this is the case that was broken.
+        {
+            EpMk2Processor fresh;
+            fresh.setPlayConfigDetails(0, 2, sr, block);
+            fresh.prepareToPlay(sr, block);
+            std::unique_ptr<juce::AudioProcessorEditor> ed(fresh.createEditor());
+            char d[96];
+            snprintf(d, sizeof d, "  (%d x %d -> %d x %d)",
+                     w, h, ed->getWidth(), ed->getHeight());
+            check(std::abs(ed->getWidth() - w) <= 2 && std::abs(ed->getHeight() - h) <= 2,
+                  "a fresh instance opens at the last size used", d);
+        }
+
+        // Leave the stored preference at the design size.  Without this the
+        // size ratchets up every run, since each run scales the last one by
+        // 5/4 -- and later checks would start from whatever it reached.
+        {
+            std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
+            if (auto* e = dynamic_cast<EpMk2Editor*>(ed.get()))
+                e->setSize(EpMk2Editor::kDesignWidth, e->designHeightForTest());
+        }
     }
 
     // The editor exists so hosts do not fall back to a generic view of JUCE's

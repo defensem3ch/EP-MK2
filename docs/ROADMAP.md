@@ -533,6 +533,30 @@ Two things worth getting right, since a Rhodes is not a synth:
 Neither is on the critical path for the physics, but both are needed before
 anyone would call this playable.
 
+### 4.3 Inline help on hover
+
+37 controls, and several of them mean nothing without the physics behind them.
+`Pickup Offset` is the Rhodes-to-Wurlitzer axis and reads as an abstract
+number; `Decay Tracking` is in octaves of Q per octave of pitch; `Bass Tilt`
+exists to oppose a differentiator. None of that is guessable from a knob.
+
+**What it should say.** For each control, one line of what it is and one of
+what it does to the sound -- not the units, which the value box already shows.
+"Where the tine sits relative to the pickup's magnetic axis. At 0 the response
+is purely even and the fundamental disappears; higher is cleaner." The material
+largely exists already, spread across `MODEL-NOTES.md` and the comments in
+`Parameters.h`, and the parameter table is the obvious place to keep it since
+it is already the single source of truth for name, range and default.
+
+**Where it should appear.** A fixed strip along the bottom of the panel rather
+than a floating tooltip: it can hold two lines comfortably, it does not
+obscure the control being read, and it does not require hovering to be
+discovered. JUCE's `MouseListener` on each `ParamControl` is enough; there is
+no need for `TooltipWindow` and its timing behaviour.
+
+Worth doing before anyone else is asked to use this, because the controls are
+not self-explanatory and the physical model is the whole point of them.
+
 ## Deliberately not doing yet
 
 * **CLAP** — wanted, and MK1 will get it first; nothing here depends on it.

@@ -111,10 +111,13 @@ public:
     int designHeight = 0;
 
     explicit EpMk2Editor(EpMk2Processor&);
-    ~EpMk2Editor() override = default;
+    ~EpMk2Editor() override;
 
     void paint(juce::Graphics&) override;
     void resized() override;
+
+    // The unscaled design height, so a test can restore the default size.
+    int designHeightForTest() const { return designHeight; }
 
 private:
     void timerCallback() override;

@@ -31,10 +31,62 @@ EpMk2Processor::EpMk2Processor()
     epmk2::params::apply(state, params, lastParamValues);
 }
 
+EpMk2Processor::Settings::Settings()
+{
+    juce::PropertiesFile::Options o;
+    o.applicationName     = "EP-MK2";
+    o.filenameSuffix      = ".settings";
+   #if JUCE_LINUX || JUCE_BSD
+    // JUCE's userApplicationDataDirectory is the home directory on Linux, so a
+    // bare folder name drops a visible directory straight into it.  Put it
+    // where the rest of the desktop keeps its configuration.
+    o.folderName          = ".config/defensem3ch";
+   #else
+    o.folderName          = "defensem3ch";
+   #endif
+    o.osxLibrarySubFolder = "Application Support";
+    // Batch writes: resized() fires continuously while a window is dragged,
+    // and each one must not become a file write.
+    o.millisecondsBeforeSaving = 1000;
+    properties.setStorageParameters(o);
+}
+
+juce::Point<int> EpMk2Processor::Settings::editorSize() const
+{
+    if (auto* p = const_cast<juce::ApplicationProperties&>(properties).getUserSettings())
+        return { p->getIntValue("editorWidth", 0), p->getIntValue("editorHeight", 0) };
+    return {};
+}
+
+void EpMk2Processor::Settings::setEditorSize(int width, int height)
+{
+    if (auto* p = properties.getUserSettings()) {
+        if (p->getIntValue("editorWidth", 0) == width
+            && p->getIntValue("editorHeight", 0) == height)
+            return;
+        p->setValue("editorWidth", width);
+        p->setValue("editorHeight", height);
+    }
+}
+
+void EpMk2Processor::flushSettings()
+{
+    settings->properties.saveIfNeeded();
+}
+
 juce::Point<int> EpMk2Processor::getSavedEditorSize() const
 {
-    return { (int) state.state.getProperty("editorWidth", 0),
-             (int) state.state.getProperty("editorHeight", 0) };
+    // Session state first: a project saved at a particular size should reopen
+    // at it, whatever the user has done to other instances since.
+    const juce::Point<int> fromSession {
+        (int) state.state.getProperty("editorWidth", 0),
+        (int) state.state.getProperty("editorHeight", 0) };
+    if (fromSession.x > 0 && fromSession.y > 0)
+        return fromSession;
+
+    // Otherwise the last size used anywhere, so a fresh instance opens the way
+    // the last one was left.
+    return settings->editorSize();
 }
 
 void EpMk2Processor::saveEditorSize(int width, int height)
@@ -43,6 +95,7 @@ void EpMk2Processor::saveEditorSize(int width, int height)
     // through the parameter history.
     state.state.setProperty("editorWidth", width, nullptr);
     state.state.setProperty("editorHeight", height, nullptr);
+    settings->setEditorSize(width, height);
 }
 
 void EpMk2Processor::getStateInformation(juce::MemoryBlock& destData)
