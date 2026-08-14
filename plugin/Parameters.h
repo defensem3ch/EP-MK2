@@ -24,6 +24,10 @@ struct Spec {
     // Where it goes.  Coefficient-affecting parameters are flagged so the
     // engine only re-derives filters when one of them actually moves.
     bool affectsCoefficients;
+    // One sentence of what it is, one of what it does to the sound.  Shown in
+    // the panel's info bar on hover.  Units are left out -- the value box
+    // already says those.
+    const char* help;
 };
 
 // The panel reads left to right, top to bottom, in the order the instrument
@@ -45,74 +49,116 @@ inline const std::vector<Spec>& table()
         // Master reaches above unity.  MK1 inherited a 0 dB ceiling from the Pd
         // patch's dbtorms convention, which was fine when the level was fixed;
         // with the excitation rebalanced there has to be make-up available.
-        { "master",          "Master",          "Output", Unit::Decibels, -100.0f,    12.0f,    0.0f, false },
+        { "master",          "Master",          "Output", Unit::Decibels, -100.0f,    12.0f,    0.0f, false,
+          "Output level for the whole instrument. Reaches above unity because the model's own level moved when the excitation was rebalanced." },
         // Polyphony is a CPU control as much as a musical one.  With the
         // sustain pedal down a Rhodes note rings for tens of seconds, so every
         // voice is legitimately busy and cost scales with this directly.
-        { "polyphony",       "Polyphony",       "Output", Unit::Count,      4.0f,    64.0f,   32.0f, false },
-        { "sustain",         "Sustain Pedal",   "Output", Unit::Toggle,     0.0f,     1.0f,    0.0f, false },
+        { "polyphony",       "Polyphony",       "Output", Unit::Count,      4.0f,    64.0f,   32.0f, false,
+          "How many notes may sound at once. Costs CPU directly: with the pedal down a note rings for tens of seconds, so voices stay genuinely busy." },
+        { "sustain",         "Sustain Pedal",   "Output", Unit::Toggle,     0.0f,     1.0f,    0.0f, false,
+          "Lifts the dampers, exactly as MIDI CC64 does. Released notes keep ringing until it drops." },
 
         // --- hammer: the strike ---------------------------------------------
-        { "hammer_level",    "Hammer Level",    "Hammer", Unit::Decibels, -100.0f,     0.0f, -100.0f, false },
-        { "hammer_contact",  "Contact Time",    "Hammer", Unit::Millis,     0.05f,   20.0f,    0.4f, false },
-        { "hammer_vel_ctc",  "Vel to Contact",  "Hammer", Unit::Ratio,      0.0f,     4.0f,    1.5f, false },
+        { "hammer_level",    "Hammer Level",    "Hammer", Unit::Decibels, -100.0f,     0.0f, -100.0f, false,
+          "How much of the raw hammer blow is mixed straight into the output. Off by default -- the tine supplies the attack now, and this only adds a click." },
+        { "hammer_contact",  "Contact Time",    "Hammer", Unit::Millis,     0.05f,   20.0f,    0.4f, false,
+          "How long the hammer stays against the tine. The main brightness control: a short contact is broadband and drives the high inharmonic modes, a long one is soft and pure." },
+        { "hammer_vel_ctc",  "Vel to Contact",  "Hammer", Unit::Ratio,      0.0f,     4.0f,    1.5f, false,
+          "How much a harder blow shortens the contact. This is where harder-is-brighter comes from, as distinct from merely louder." },
         // How much further a bass tine swings than a treble one for the same
         // blow.  The pickup differentiates, which is a real +6 dB/octave, and
         // without this the whole keyboard tilts against the bass.
-        { "bass_tilt",       "Bass Tilt",       "Hammer", Unit::Ratio,      0.0f,     1.5f,    0.5f, false },
+        { "bass_tilt",       "Bass Tilt",       "Hammer", Unit::Ratio,      0.0f,     1.5f,    0.5f, false,
+          "How much further a bass tine swings than a treble one for the same blow. The pickup senses rate of change, which favours the treble by 6 dB per octave; this opposes it. Raise it for more bass." },
         // How much one strike differs from the next.  0 is exactly repeatable.
-        { "strike_var",      "Strike Variation","Hammer", Unit::Ratio,      0.0f,     1.0f,    0.3f, false },
+        { "strike_var",      "Strike Variation", "Hammer", Unit::Ratio,     0.0f,     1.0f,    0.3f, false,
+          "How much one strike differs from the next in force, contact time and timing. At 0 every note is identical; raise it and repeated notes stop sounding sequenced." },
 
         // --- tine: what actually vibrates -----------------------------------
-        { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,   -6.0f, false },
-        { "tine_send",       "Tine to Pickup",  "Tine", Unit::Decibels, -100.0f,    24.0f,  -77.0f, false },
-        { "tine_ratio1",     "Mode 1 Ratio",    "Tine", Unit::Ratio,      0.0f,    30.0f,    7.1f, true  },
-        { "tine_ratio2",     "Mode 2 Ratio",    "Tine", Unit::Ratio,      0.0f,    60.0f,   20.4f, true  },
-        { "tine_ratio3",     "Mode 3 Ratio",    "Tine", Unit::Ratio,      0.0f,    60.0f,   39.7f, true  },
-        { "tine_mode2_lvl",  "Mode 2 Level",    "Tine", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
-        { "tine_mode3_lvl",  "Mode 3 Level",    "Tine", Unit::Decibels, -100.0f,     0.0f,   -6.0f, false },
-        { "tine_hipass",     "Tine High-Pass",  "Tine", Unit::Hertz,     20.0f, 20000.0f,   20.0f, true  },
-        { "tine_decay",      "Tine Decay",      "Tine", Unit::Q,          1.0f,  2000.0f,  225.0f, true  },
-        { "tine_mode_damp",  "Mode Damping",    "Tine", Unit::Ratio,      0.0f,     2.0f,    0.0f, true  },
+        { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,   -6.0f, false,
+          "How much of the tine's own vibration goes straight to the output, bypassing the pickup." },
+        { "tine_send",       "Tine to Pickup",  "Tine", Unit::Decibels, -100.0f,    24.0f,  -77.0f, false,
+          "How much of the tine reaches the pickup. The pickup faces the tine, so this is the more physical of its two paths to the output." },
+        { "tine_ratio1",     "Mode 1 Ratio",    "Tine", Unit::Ratio,      0.0f,    30.0f,    7.1f, true,
+          "Frequency of the tine's first inharmonic mode, as a multiple of the note. Measured at 7.1 on a real Rhodes. Whole numbers make it harmonic, like a string." },
+        { "tine_ratio2",     "Mode 2 Ratio",    "Tine", Unit::Ratio,      0.0f,    60.0f,   20.4f, true,
+          "The second inharmonic mode, measured at 20.4. Skipped automatically on notes where it would land above Nyquist." },
+        { "tine_ratio3",     "Mode 3 Ratio",    "Tine", Unit::Ratio,      0.0f,    60.0f,   39.7f, true,
+          "The third inharmonic mode, measured at 39.7. Only exists below about D5; above that it is past Nyquist and this does nothing." },
+        { "tine_mode2_lvl",  "Mode 2 Level",    "Tine", Unit::Decibels, -100.0f,     0.0f,    0.0f, false,
+          "Level of the second tine mode against the first." },
+        { "tine_mode3_lvl",  "Mode 3 Level",    "Tine", Unit::Decibels, -100.0f,     0.0f,   -6.0f, false,
+          "Level of the third tine mode against the first." },
+        { "tine_hipass",     "Tine High-Pass",  "Tine", Unit::Hertz,     20.0f, 20000.0f,   20.0f, true,
+          "Removes low frequencies from the signal driving the tine, before it reaches the modes." },
+        { "tine_decay",      "Tine Decay",      "Tine", Unit::Q,          1.0f,  2000.0f,  225.0f, true,
+          "How long the tine modes ring. This is the bark in the attack: short is percussive and woody, long is bell-like." },
+        { "tine_mode_damp",  "Mode Damping",    "Tine", Unit::Ratio,      0.0f,     2.0f,    0.0f, true,
+          "How much faster the upper modes decay than the first. Real modes damp progressively faster going up; 0 gives them all the same decay." },
         // How much one key differs from the next -- fixed per key, not random.
-        { "key_var",         "Key Variation",   "Tine", Unit::Ratio,      0.0f,     1.0f,   0.35f, true  },
+        { "key_var",         "Key Variation",   "Tine", Unit::Ratio,      0.0f,     1.0f,   0.35f, true,
+          "How much one key differs from the next in decay, tuning and level. Fixed per key rather than random, so a note sounds like itself every time. Tines are individually cut: measured decay varies fourfold with no pattern in pitch." },
 
         // --- tone bar: what the tine is mounted on --------------------------
-        { "tone_level",      "Tone Level",      "Tone Bar", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
-        { "tone_decay",      "Tone Decay",      "Tone Bar", Unit::Q,          1.0f,  4000.0f, 1750.0f, true },
-        { "q_tracking",      "Decay Tracking",  "Tone Bar", Unit::Ratio,      0.0f,     1.0f,  0.056f, true },
-        { "tone_release",    "Tone Release",    "Tone Bar", Unit::Q,          1.0f,  2000.0f,   30.0f, true  },
-        { "sub_level",       "Sub Level",       "Tone Bar", Unit::Decibels, -100.0f,     0.0f,  -30.0f, false },
-        { "sub_ratio",       "Sub Ratio",       "Tone Bar", Unit::Ratio,      0.2f,     1.0f,   0.55f, true  },
-        { "noteoff_level",   "Damper Thump",    "Tone Bar", Unit::Decibels, -100.0f,     0.0f,  -37.9f, false },
+        { "tone_level",      "Tone Level",      "Tone Bar", Unit::Decibels, -100.0f,     0.0f,    0.0f, false,
+          "How much of the tone bar, the resonator the tine is mounted on, reaches the output." },
+        { "tone_decay",      "Tone Decay",      "Tone Bar", Unit::Q,          1.0f,  4000.0f, 1750.0f, true,
+          "How long the fundamental rings, measured at A4. This is the body of the note, as against the tine's attack." },
+        { "q_tracking",      "Decay Tracking",  "Tone Bar", Unit::Ratio,      0.0f,     1.0f,  0.056f, true,
+          "How much the decay changes with pitch. Nearly flat by default: the reference instrument shows no reliable trend of decay against pitch at all." },
+        { "tone_release",    "Tone Release",    "Tone Bar", Unit::Q,          1.0f,  2000.0f,   30.0f, true,
+          "How quickly the note dies once the key is up and the damper lands. Much shorter than the sustained decay." },
+        { "sub_level",       "Sub Level",       "Tone Bar", Unit::Decibels, -100.0f,     0.0f,  -30.0f, false,
+          "Level of the partial below the fundamental that the tone bar produces. Adds weight and depth without adding pitch." },
+        { "sub_ratio",       "Sub Ratio",       "Tone Bar", Unit::Ratio,      0.2f,     1.0f,   0.55f, true,
+          "Where that sub-partial sits, as a fraction of the note. Measured between 0.42 and 0.60 on a real instrument, and absent in the treble." },
+        { "noteoff_level",   "Damper Thump",    "Tone Bar", Unit::Decibels, -100.0f,     0.0f,  -37.9f, false,
+          "The thump of the damper landing on the tine when the key is released." },
 
         // --- pickup: how it is heard ----------------------------------------
-        { "pickup_level",    "Pickup Level",    "Pickup", Unit::Decibels, -100.0f,     6.0f,    6.0f, false },
-        { "pickup_gain",     "Pickup Drive",    "Pickup", Unit::Decibels,    0.0f,    24.0f,   15.0f, false },
+        { "pickup_level",    "Pickup Level",    "Pickup", Unit::Decibels, -100.0f,     6.0f,    6.0f, false,
+          "Level of the pickup's own output, which is most of what you hear." },
+        { "pickup_gain",     "Pickup Drive",    "Pickup", Unit::Decibels,    0.0f,    24.0f,   15.0f, false,
+          "How hard the tine drives the pickup. Past a point the flux curve saturates and the tone thickens and distorts." },
         // Geometry, replacing the old symmetry exponent.  Offset is what
         // creates asymmetry, so it is now the Rhodes-to-Wurlitzer axis: at 0
         // the tine sits on the magnetic axis and the response is purely even.
-        { "pickup_distance", "Pickup Distance", "Pickup", Unit::Ratio,      0.1f,     3.0f,    0.8f, false },
-        { "pickup_offset",   "Pickup Offset",   "Pickup", Unit::Ratio,      0.0f,     1.5f,    0.8f, false },
-        { "pickup_lopass",   "Coil Low-Pass",   "Pickup", Unit::Hertz,     20.0f, 20000.0f, 2000.0f, true  },
-        { "buzz_level",      "Buzz Level",      "Pickup", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
-        { "buzz_phase",      "Buzz Phase",      "Pickup", Unit::Toggle,     0.0f,     1.0f,    1.0f, false },
+        { "pickup_distance", "Pickup Distance", "Pickup", Unit::Ratio,      0.1f,     3.0f,    0.8f, false,
+          "How far the tine rests from the pole piece. Near gives a sharp, spiky response; far is gentler and more linear." },
+        { "pickup_offset",   "Pickup Offset",   "Pickup", Unit::Ratio,      0.0f,     1.5f,    0.8f, false,
+          "How far the tine sits off the pickup's magnetic axis, and the strongest Rhodes-to-Wurlitzer control here. At 0 the response is purely even and the fundamental collapses under its own octave; low values bark, high values are clean and fundamental-heavy." },
+        { "pickup_lopass",   "Coil Low-Pass",   "Pickup", Unit::Hertz,     20.0f, 20000.0f, 2000.0f, true,
+          "The coil's own inductance rolling off the top. With the pickup's rate-of-change response it makes a broad band-pass." },
+        { "buzz_level",      "Buzz Level",      "Pickup", Unit::Decibels, -100.0f,     0.0f,    0.0f, false,
+          "A fourth-power term added to the pickup output, putting a hard edge on the loud half of the waveform." },
+        { "buzz_phase",      "Buzz Phase",      "Pickup", Unit::Toggle,     0.0f,     1.0f,    1.0f, false,
+          "Which half of the waveform the buzz lands on. Changes whether the tone reads as hollow or forward." },
         // Off by default: this feeds the hammer pulse straight into the pickup,
         // which no real pickup sees.  It faked an attack the tine modes now
         // supply properly.
-        { "pickup_attack",   "Hammer to Pickup","Pickup", Unit::Decibels, -100.0f,    30.0f, -100.0f, false },
+        { "pickup_attack",   "Hammer to Pickup", "Pickup", Unit::Decibels, -100.0f,   30.0f, -100.0f, false,
+          "Feeds the hammer blow straight into the pickup, which no real pickup sees. Off by default: it faked an attack the tine modes now produce properly, and once differentiated it is audibly a click." },
 
         // --- tremolo --------------------------------------------------------
-        { "trem_on",         "Tremolo",         "Tremolo", Unit::Toggle,     0.0f,     1.0f,    0.0f, false },
-        { "trem_depth",      "Tremolo Depth",   "Tremolo", Unit::Decibels, -100.0f,     0.0f,   -9.0f, false },
-        { "trem_rate",       "Tremolo Rate",    "Tremolo", Unit::Hertz,      0.0f,    20.0f,    3.0f, false },
-        { "trem_shape",      "Tremolo Shape",   "Tremolo", Unit::Count,      0.0f,   127.0f,    0.0f, false },
+        { "trem_on",         "Tremolo",         "Tremolo", Unit::Toggle,     0.0f,     1.0f,    0.0f, false,
+          "Switches the tremolo: amplitude modulation, the effect a Rhodes suitcase has. Not vibrato, there is no pitch movement." },
+        { "trem_depth",      "Tremolo Depth",   "Tremolo", Unit::Decibels, -100.0f,     0.0f,   -9.0f, false,
+          "How far the tremolo swings the level." },
+        { "trem_rate",       "Tremolo Rate",    "Tremolo", Unit::Hertz,      0.0f,    20.0f,    3.0f, false,
+          "How fast the tremolo sweeps." },
+        { "trem_shape",      "Tremolo Shape",   "Tremolo", Unit::Count,      0.0f,   127.0f,    0.0f, false,
+          "Blends the tremolo shape from a sine to a triangle. The triangle has harder turnarounds." },
 
         // --- tuning: set once and left --------------------------------------
-        { "bass_freq",       "Base Frequency",  "Tuning", Unit::Hertz,    100.0f, 20000.0f,  440.0f, true  },
-        { "base_note",       "Base MIDI Note",  "Tuning", Unit::Count,      0.0f,   127.0f,   69.0f, true  },
-        { "divisions",       "Divisions",       "Tuning", Unit::Count,      1.0f,   100.0f,   12.0f, true  },
-        { "interval",        "Interval",        "Tuning", Unit::Ratio,      0.0f,    20.0f,    2.0f, true  },
+        { "bass_freq",       "Base Frequency",  "Tuning", Unit::Hertz,    100.0f, 20000.0f,  440.0f, true,
+          "The reference pitch the whole keyboard is tuned from." },
+        { "base_note",       "Base MIDI Note",  "Tuning", Unit::Count,      0.0f,   127.0f,   69.0f, true,
+          "Which MIDI note sits at the reference pitch." },
+        { "divisions",       "Divisions",       "Tuning", Unit::Count,      1.0f,   100.0f,   12.0f, true,
+          "How many steps the tuning interval is divided into. 12 is the usual semitone scale." },
+        { "interval",        "Interval",        "Tuning", Unit::Ratio,      0.0f,    20.0f,    2.0f, true,
+          "The interval the scale repeats over. 2 is the octave; other values give non-octave tunings." },
     };
     return t;
 }

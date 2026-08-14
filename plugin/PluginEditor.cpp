@@ -16,6 +16,7 @@ constexpr float kSectionFont = 17.0f;
 constexpr float kTitleFont   = 30.0f;
 constexpr float kValueFont   = 16.0f;
 constexpr float kCreditFont  = 12.0f;
+constexpr float kInfoFont    = 14.0f;
 // Room for two lines of label.
 constexpr int   kLabelHeight = 34;
 // Space below the last row of controls, inside a section.  Note a section is
@@ -23,16 +24,21 @@ constexpr int   kLabelHeight = 34;
 // that -- allowing only kPad here left the bottom row of value boxes sitting
 // flush on the section border.
 constexpr int   kSectionBottomPad = 22;
+// A fixed strip rather than a floating tooltip: it does not cover the control
+// being read, it does not wait for a hover timeout, and it is visible before
+// anyone thinks to look for it.
+constexpr int   kInfoBarHeight = 52;
 constexpr int kPad           = 8;
 constexpr int kSectionColumns = 3;
 }
 
 //==============================================================================
 ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec& spec)
-    : label(spec.name), isToggle(spec.unit == Unit::Toggle)
+    : label(spec.name), help(spec.help), isToggle(spec.unit == Unit::Toggle)
 {
     if (isToggle) {
         addAndMakeVisible(button);
+        button.addMouseListener(this, true);
         buttonAttachment = std::make_unique<
             juce::AudioProcessorValueTreeState::ButtonAttachment>(tree, spec.id, button);
     } else {
@@ -50,9 +56,22 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
         if (spec.unit == Unit::Hertz || spec.unit == Unit::Q || spec.unit == Unit::Millis)
             slider.setSkewFactor(0.35);
         addAndMakeVisible(slider);
+        slider.addMouseListener(this, true);
         sliderAttachment = std::make_unique<
             juce::AudioProcessorValueTreeState::SliderAttachment>(tree, spec.id, slider);
     }
+}
+
+void ParamControl::mouseEnter(const juce::MouseEvent&)
+{
+    if (auto* panel = findParentComponentOfClass<PanelContent>())
+        panel->showHelp(label, help);
+}
+
+void ParamControl::mouseExit(const juce::MouseEvent&)
+{
+    if (auto* panel = findParentComponentOfClass<PanelContent>())
+        panel->showHelp({}, {});
 }
 
 void ParamControl::paint(juce::Graphics& g)
@@ -166,6 +185,15 @@ PanelContent::PanelContent(EpMk2Processor& p, juce::AudioProcessorValueTreeState
     computeLayout(EpMk2Editor::kDesignWidth);
 }
 
+void PanelContent::showHelp(const juce::String& name, const juce::String& text)
+{
+    if (name == helpName)
+        return;
+    helpName = name;
+    helpText = text;
+    repaint(getLocalBounds().removeFromBottom(kInfoBarHeight));
+}
+
 void PanelContent::setVoiceCount(int n)
 {
     if (n == activeVoices)
@@ -202,6 +230,35 @@ void PanelContent::paint(juce::Graphics& g)
     g.setFont(juce::FontOptions(kLabelFont, juce::Font::bold));
     g.drawText(juce::String(activeVoices) + (activeVoices == 1 ? " voice" : " voices"),
                header.reduced(16, 0), juce::Justification::centredRight);
+
+    // ---- info bar ---------------------------------------------------------
+    auto bar = getLocalBounds().removeFromBottom(kInfoBarHeight);
+    g.setColour(juce::Colour(0xff222222));
+    g.fillRect(bar);
+    g.setColour(juce::Colour(0xff3a3a3a));
+    g.fillRect(bar.removeFromTop(1));
+    bar = bar.reduced(16, 5);
+
+    if (helpName.isEmpty()) {
+        g.setColour(juce::Colour(0xff707070));
+        g.setFont(juce::FontOptions(kInfoFont));
+        g.drawText("Hover a control to see what it does.", bar,
+                   juce::Justification::centredLeft);
+        return;
+    }
+
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::FontOptions(kInfoFont, juce::Font::bold));
+    const int nameWidth = juce::GlyphArrangement::getStringWidthInt(
+        juce::Font(juce::FontOptions(kInfoFont, juce::Font::bold)), helpName + "  ");
+    g.drawText(helpName, bar.withWidth(nameWidth), juce::Justification::centredLeft);
+
+    g.setColour(juce::Colour(0xffc8c8c8));
+    g.setFont(juce::FontOptions(kInfoFont));
+    g.drawFittedText(helpText,
+                     getLocalBounds().removeFromBottom(kInfoBarHeight).reduced(16, 5)
+                         .withTrimmedLeft(nameWidth),
+                     juce::Justification::centredLeft, 2);
 }
 
 // Three columns, with each section going into whichever is currently shortest.
@@ -234,13 +291,14 @@ void PanelContent::computeLayout(int width)
     int tallest = 0;
     for (int c = 0; c < kSectionColumns; ++c)
         tallest = juce::jmax(tallest, columnHeight[c]);
-    height = kHeaderHeight + 2 * kPad + tallest;
+    height = kHeaderHeight + 2 * kPad + tallest + kInfoBarHeight;
 }
 
 void PanelContent::resized()
 {
     auto r = getLocalBounds();
     r.removeFromTop(kHeaderHeight);
+    r.removeFromBottom(kInfoBarHeight);
     r.reduce(kPad, kPad);
 
     const int cellW = r.getWidth() / kSectionColumns;

@@ -16,8 +16,15 @@ public:
     void resized() override;
     void paint(juce::Graphics&) override;
 
+    // Hovering anywhere on the control, including its slider, puts its help in
+    // the panel's info bar.  The slider covers most of the cell, so this class
+    // listens to it rather than relying on its own mouse events.
+    void mouseEnter(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+
 private:
     juce::String label;
+    juce::String help;
     bool isToggle;
 
     juce::Slider slider;
@@ -79,6 +86,7 @@ public:
     void resized() override;
 
     void setVoiceCount(int n);
+    void showHelp(const juce::String& name, const juce::String& text);
 
     // The panel is as tall as its contents need at the design width.  Deriving
     // it rather than hard-coding it means adding parameters cannot silently
@@ -98,6 +106,7 @@ private:
     EpMk2Processor& proc;
     juce::OwnedArray<ParamSection> sections;
     std::vector<Placement> placements;
+    juce::String helpName, helpText;
     int height = 0;
     int activeVoices = 0;
 

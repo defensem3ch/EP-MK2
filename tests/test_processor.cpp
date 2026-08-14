@@ -926,10 +926,14 @@ int main()
         int w = 0, h = 0;
         {
             std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
-            ed->setSize(ed->getWidth() * 5 / 4, ed->getHeight() * 5 / 4);
-            // Read back rather than assume: the constrainer holds a fixed
-            // aspect ratio and a maximum, so the size asked for is not always
-            // the size given.
+            // Size from the *design* size, not from whatever happens to be
+            // stored: scaling up whatever the last run left eventually exceeds
+            // the maximum, and a size outside the limits is refused on reload
+            // -- correctly -- which then reads as a failure of the storage.
+            auto* e = dynamic_cast<EpMk2Editor*>(ed.get());
+            w = EpMk2Editor::kDesignWidth * 5 / 4;
+            h = e != nullptr ? e->designHeightForTest() * 5 / 4 : ed->getHeight();
+            ed->setSize(w, h);
             w = ed->getWidth();
             h = ed->getHeight();
         }
@@ -1031,6 +1035,64 @@ int main()
                 }
             };
             margins(ed.get());
+            // The info bar has to actually receive help text.  Hovering
+            // cannot be simulated in a snapshot, so drive it directly and
+            // check the bar changes what it draws.
+            {
+                auto barOf = [&](juce::Image& src) {
+                    return src.getClippedImage(
+                        juce::Rectangle<int>(0, src.getHeight() - 40,
+                                             src.getWidth(), 38));
+                };
+                auto distinct = [](const juce::Image& im) {
+                    std::set<juce::uint32> seen;
+                    for (int y = 0; y < im.getHeight(); y += 2)
+                        for (int x = 0; x < im.getWidth(); x += 2)
+                            seen.insert(im.getPixelAt(x, y).getARGB());
+                    return (int) seen.size();
+                };
+                juce::Image idle = ed->createComponentSnapshot(ed->getLocalBounds());
+                auto idleBar = barOf(idle);
+
+                // Reach into the panel and show a control's help.
+                std::function<PanelContent*(juce::Component*)> findPanel =
+                    [&](juce::Component* c) -> PanelContent* {
+                        for (int k = 0; k < c->getNumChildComponents(); ++k) {
+                            auto* ch = c->getChildComponent(k);
+                            if (auto* pc = dynamic_cast<PanelContent*>(ch)) return pc;
+                            if (auto* deep = findPanel(ch)) return deep;
+                        }
+                        return nullptr;
+                    };
+                bool ok = false;
+                if (auto* panel = findPanel(ed.get())) {
+                    panel->showHelp("Bass Tilt",
+                                    "How much further a bass tine swings than a "
+                                    "treble one for the same blow.");
+                    juce::Image shown = ed->createComponentSnapshot(ed->getLocalBounds());
+                    auto shownBar = barOf(shown);
+                    // Count how much of the strip actually changed, rather
+                    // than sampling one pixel that may be background in both.
+                    int changed = 0;
+                    for (int y = 0; y < shownBar.getHeight(); ++y)
+                        for (int x = 0; x < shownBar.getWidth(); ++x)
+                            if (shownBar.getPixelAt(x, y) != idleBar.getPixelAt(x, y))
+                                ++changed;
+                    ok = changed > 200;
+                    panel->showHelp({}, {});
+                }
+                check(ok, "the info bar shows a control's help");
+            }
+
+            // Every control must carry help text, or the bar is useless for it.
+            int missingHelp = 0;
+            for (const auto& sp : epmk2::params::table())
+                if (sp.help == nullptr || juce::String(sp.help).length() < 20)
+                    ++missingHelp;
+            char mh[64];
+            snprintf(mh, sizeof mh, "  (%d without)", missingHelp);
+            check(missingHelp == 0, "every control explains itself", mh);
+
             char bm[96];
             snprintf(bm, sizeof bm, "  (%d px, tightest is %s)",
                      tightest, tightestName.toRawUTF8());

@@ -609,6 +609,41 @@ no need for `TooltipWindow` and its timing behaviour.
 Worth doing before anyone else is asked to use this, because the controls are
 not self-explanatory and the physical model is the whole point of them.
 
+### 4.4 Mono / stereo tremolo
+
+The tremolo is currently one LFO on a mono sum -- both channels move together,
+which is the mono behaviour. A Rhodes suitcase pans between the two amplifiers
+rather than simply ducking, and that stereo movement is a large part of what
+the effect is *for*.
+
+A switch, then, with stereo modulating the channels in antiphase. Worth noting
+the plugin is mono internally today: `processBlock` renders once and copies to
+both channels, so this is the first thing that will genuinely need a stereo
+path, and 2.2 (sympathetic resonance) and 4.2 (vibrato) would all benefit from
+that existing. Whichever lands first should build it properly.
+
+### 4.5 Scale Workshop / .scl tunings
+
+The tuning section already generalises beyond 12-tone equal temperament --
+`Divisions` and `Interval` give any equal division of any interval, which is
+how the Pd original did it and is more than most instruments offer. What it
+cannot do is an *unequal* scale: a table of arbitrary ratios or cents per
+degree, which is what Scale Workshop (sevish.com/scaleworkshop) exports.
+
+**Formats.** `.scl` (Scala) is the lingua franca and is trivial to parse --
+a line count then one ratio or cents value per degree. `.kbm` maps degrees to
+MIDI keys and matters as soon as a scale is not 12 notes. Scale Workshop
+exports both.
+
+**Where it lands.** `Engine::noteToFrequency` is the only place pitch is
+decided, so the model does not care. The work is a tuning table on the
+processor, file loading in the editor, and deciding what travels with the
+session -- the file path is fragile, so the table itself should be in the
+state.
+
+Worth doing: `Divisions` and `Interval` already say this instrument is not
+meant to be stuck in 12-equal, and an unequal scale is the obvious next step.
+
 ## Deliberately not doing yet
 
 * **CLAP** — wanted, and MK1 will get it first; nothing here depends on it.
