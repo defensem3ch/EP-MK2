@@ -147,6 +147,76 @@ int main()
         check(after < 1.0e-5f, "CC120 silences immediately", d);
     }
 
+    // ---- restriking a still-ringing tine ---------------------------------
+    // The hammer strikes a tine that is already moving, so the result depends
+    // on where in its cycle the strike lands.  Two repeats at different gaps
+    // must therefore differ -- and they must differ *because* of the phase,
+    // with no randomness anywhere in the model.
+    {
+        // Strike, wait `gapBlocks`, strike again, and capture what follows.
+        auto restrikeTail = [&](int gapBlocks, std::vector<float>& out) {
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+
+            juce::MidiBuffer first;
+            first.addEvent(juce::MidiMessage::noteOn(1, 57, (juce::uint8)100), 0);
+            renderPeak(proc, first, gapBlocks, block);
+
+            juce::MidiBuffer again;
+            again.addEvent(juce::MidiMessage::noteOn(1, 57, (juce::uint8)100), 0);
+            juce::AudioBuffer<float> b(2, block);
+            out.clear();
+            for (int i = 0; i < blocksPerSecond / 2; ++i) {
+                b.clear();
+                proc.processBlock(b, again);
+                again.clear();
+                for (int n = 0; n < block; ++n)
+                    out.push_back(b.getSample(0, n));
+            }
+        };
+
+        auto rms = [](const std::vector<float>& v) {
+            double e = 0.0;
+            for (float s : v) e += double(s) * double(s);
+            return float(std::sqrt(e / std::max<size_t>(1, v.size())));
+        };
+
+        // Two gaps chosen to land the second strike at different points in the
+        // tine's cycle.  A2 is ~110 Hz, so a single block at 48 kHz is already
+        // more than a full period.
+        std::vector<float> a, b2;
+        restrikeTail(20, a);
+        restrikeTail(23, b2);
+
+        double d = 0.0;
+        const size_t n = std::min(a.size(), b2.size());
+        for (size_t k = 0; k < n; ++k) {
+            const double delta = double(a[k]) - double(b2[k]);
+            d += delta * delta;
+        }
+        const float diff = float(std::sqrt(d / std::max<size_t>(1, n)))
+                         / std::max(1.0e-9f, rms(a));
+        char rd[80]; snprintf(rd, sizeof rd, "  (%.1f%% apart)", diff * 100.0f);
+        check(diff > 0.02f, "repeat strikes differ with strike phase", rd);
+
+        // A restrike must reuse the same tine rather than stacking a second
+        // voice on the same pitch.
+        juce::MidiBuffer panic;
+        panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+        renderPeak(proc, panic, 1, block);
+        juce::MidiBuffer one;
+        one.addEvent(juce::MidiMessage::noteOn(1, 57, (juce::uint8)100), 0);
+        renderPeak(proc, one, 20, block);
+        juce::MidiBuffer two;
+        two.addEvent(juce::MidiMessage::noteOn(1, 57, (juce::uint8)100), 0);
+        renderPeak(proc, two, 20, block);
+        char vc[64]; snprintf(vc, sizeof vc, "  (%d voice)", proc.getActiveVoiceCount());
+        check(proc.getActiveVoiceCount() == 1, "a repeat restrikes one tine", vc);
+
+        renderPeak(proc, panic, 1, block);
+    }
+
     // Parameters: every entry in the table must exist, defaults must survive a
     // state round-trip, and moving one must actually change the audio.
     {

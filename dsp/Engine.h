@@ -77,8 +77,10 @@ public:
     {
         if (velocity <= 0) { noteOff(midiNote, p); return; }
         Voice& v = voices[allocate(midiNote)];
+        // Same pitch, still sounding: the same tine struck again.
+        const bool restrike = v.isActive() && (int)v.getNote() == midiNote;
         v.noteOn((float)midiNote, (float)velocity,
-                 noteToFrequency((float)midiNote, p), p.voice);
+                 noteToFrequency((float)midiNote, p), p.voice, restrike);
     }
 
     void noteOff(int midiNote, const EngineParams& p) noexcept
@@ -161,13 +163,21 @@ private:
     // a Rhodes note rings for tens of seconds, so under the pedal every voice
     // is legitimately busy and something has to give -- it should be whatever
     // is least audible.  Pd's [poly] cycled blindly regardless of level.
-    // Note deliberately not reused for a repeat of the same pitch.  Striking a
-    // still-ringing voice restarts it, which both cuts the previous note's tail
-    // and puts a step in the output when its resonators come back from behind
-    // the retrigger mute.  Letting the repeat take a fresh voice matches both
-    // the instrument (two strikes of one tine do overlap) and Pd's [poly].
-    int allocate(int) noexcept
+    // A repeat of a pitch that is still sounding goes back to the *same* voice,
+    // ahead of any free one: a Rhodes has one tine per note, and striking it
+    // again while it is still moving is what produces the in-phase /
+    // out-of-phase variation between repeats.  Voice::noteOn is told this is a
+    // restrike so it leaves the resonator state alone.
+    //
+    // This used to take a fresh voice instead, because restriking put a step in
+    // the output.  That step came from the retrigger mute, not from the
+    // physics, and it is gone now that a restrike does not mute at all.
+    int allocate(int midiNote) noexcept
     {
+        for (int i = 0; i < voiceCount; ++i)
+            if (voices[i].isActive() && (int)voices[i].getNote() == midiNote)
+                return i;
+
         for (int i = 0; i < voiceCount; ++i)
             if (!voices[i].isActive())
                 return i;

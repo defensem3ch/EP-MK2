@@ -123,36 +123,32 @@ harp/frame assembly. The coupling the video describes is real — it is just
 through the frame and the shared pickup rail, not a soundboard. That changes
 how strong the effect should be, not whether to model it.
 
-### 2.1 Hammer strike phase — in phase vs out of phase
+### 2.1 Hammer strike phase — in phase vs out of phase — **done**
 
 **The observation:** the hammer always strikes the same tine, but the tine may
 already be moving. Whether the strike is with or against that motion changes
 the attack.
 
-**Now: we actively destroy this.** `Voice::noteOn` sets `gateRestoreAt` and
-calls `clearFilterState()` 2 ms in, wiping the resonator state. That was added
-deliberately, and for a good reason — retriggering a still-ringing voice
-produced a step in the output and an audible click (measured jump 0.277). The
-fix was a fresh voice plus a state clear, and it took the noodling render from
-several glitches to zero.
+**What was in the way.** `Voice::noteOn` muted the voice and called
+`clearFilterState()` 2 ms in, wiping the resonators, and the allocator sent a
+repeated pitch to a *fresh* voice. Both were added to kill a retrigger click
+(measured jump 0.277). But that click came from the retrigger mute — gate
+snapping 0→1 with the old resonators behind it — not from the physics.
 
-But the click was a *gate discontinuity*, not a physical consequence. The
-correct fix keeps the ringing tine and removes the step:
+**What it is now.** A repeat of a pitch that is still sounding goes back to the
+same voice, and that voice is told it is a *restrike*: no mute, no state clear,
+the new excitation simply sums into a resonator that is already moving. Whether
+it arrives with or against the tine's motion falls out of the physics.
 
-* Do not clear filter state on restrike. Let the new excitation sum into a
-  resonator that is already moving — the in-phase/out-of-phase behaviour then
-  falls out of the physics for free, with no randomness needed.
-* Remove the click at its source: no instantaneous gate change. Either
-  crossfade the gate over a few ms, or drop the reset envelope entirely once
-  state is no longer being wiped (the step existed *because* of the wipe).
+A different note taking a voice over still mutes and clears, because those
+resonators are tuned to the wrong frequency and would be audible garbage. The
+two cases genuinely differ; conflating them was the original mistake.
 
-This is the single most interesting item on the list: it makes the model more
-physical and less code, and it converts a known workaround back into a feature.
-
-**Verify:** the existing discontinuity detector in `tests/play_midi.cpp` — the
-`ep_noodling.MID` render must stay at **0 discontinuities**. Then confirm
-repeated strikes of one note actually differ, by rendering the same note twice
-at a controlled interval and diffing.
+**Measured:** two repeats at different gaps come out **17.9% apart** with no
+randomness anywhere in the model. `ep_noodling.MID` stays at **0
+discontinuities**. Peak voices for that performance fell from 10 to 6 and CPU
+from 0.8% to 0.7% of a core, because repeats no longer stack a second voice per
+pitch — a real Rhodes has one tine per note.
 
 ### 2.2 Sympathetic resonance
 

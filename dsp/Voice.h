@@ -105,8 +105,12 @@ public:
     // Current output level, for choosing which voice to steal.
     float getLevel() const noexcept { return envelope; }
 
+    // `restrike` means this is the same tine being struck again while it is
+    // still moving -- a repeat of the pitch this voice is already playing, not
+    // a new note taking the voice over.  The two cases have to behave
+    // differently: see the end of this function.
     void noteOn(float midiNote, float velocity, float freqHz,
-                const VoiceParams& p) noexcept
+                const VoiceParams& p, bool restrike = false) noexcept
     {
         note = midiNote;
         held = true;
@@ -130,14 +134,31 @@ public:
         strikeRamp = 1.0f;
         strikeInc = strikePeriodSamples > 0.0f ? -1.0f / strikePeriodSamples : -1.0f;
 
-        // Amplitude reset: fade out over 1 ms, and at +2 ms -- with the gate
-        // already at zero, so it cannot be heard -- clear the filter state
-        // before restoring gain.  Without the clear, a voice taken over from
-        // another note brings its old resonator ringing back the instant the
-        // gate reopens, which is a step in the output and audible as a click.
-        gateTarget = 0.0f;
-        gateInc = -gate / float(0.001 * sampleRate);
-        gateRestoreAt = int(0.002 * sampleRate);
+        if (restrike) {
+            // The hammer has struck a tine that is still vibrating.  Keep every
+            // resonator exactly as it is and let the new excitation sum into
+            // it: whether the strike happens to arrive with or against the
+            // tine's current motion then falls out of the physics, and the
+            // attack differs from one repeat to the next without any randomness
+            // being added.  A real Rhodes has one tine per note, so this is
+            // also simply what the instrument does.
+            //
+            // No mute, no state clear, and so no step to hide.
+            gate = 1.0f;
+            gateInc = 0.0f;
+            gateRestoreAt = 0;
+            noteOffRamp = 0.0f;   // cancel a release thump still in flight
+        } else {
+            // A different note is taking this voice over, so its resonators are
+            // tuned to the wrong frequency and would be audible garbage.  Fade
+            // out over 1 ms, and at +2 ms -- with the gate already at zero, so
+            // it cannot be heard -- clear the filter state before restoring
+            // gain.  Without the clear, the old note's ringing comes back the
+            // instant the gate reopens, which is a step and audible as a click.
+            gateTarget = 0.0f;
+            gateInc = -gate / float(0.001 * sampleRate);
+            gateRestoreAt = int(0.002 * sampleRate);
+        }
     }
 
     void noteOff(const VoiceParams& p) noexcept
