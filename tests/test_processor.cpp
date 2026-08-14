@@ -521,13 +521,17 @@ int main()
 
         float flatLowTail = 0.0f, flatLowPeak = 0.0f;
         float trkLowTail  = 0.0f, trkLowPeak  = 0.0f;
-        decayAndPeak(33, 0.0f,   flatLowTail, flatLowPeak);
-        decayAndPeak(33, 0.217f, trkLowTail,  trkLowPeak);
+        // Exercised at a strong setting, not the shipped default: the default
+        // is deliberately near flat, because the reference library shows no
+        // reliable trend of Q against pitch (r2 0.02).  What is being tested
+        // is that the control works, not what it is set to.
+        decayAndPeak(33, 0.0f, flatLowTail, flatLowPeak);
+        decayAndPeak(33, 0.5f, trkLowTail,  trkLowPeak);
 
         float flatHiTail = 0.0f, flatHiPeak = 0.0f;
         float trkHiTail  = 0.0f, trkHiPeak  = 0.0f;
-        decayAndPeak(93, 0.0f,   flatHiTail, flatHiPeak);
-        decayAndPeak(93, 0.217f, trkHiTail,  trkHiPeak);
+        decayAndPeak(93, 0.0f, flatHiTail, flatHiPeak);
+        decayAndPeak(93, 0.5f, trkHiTail,  trkHiPeak);
 
         char d1[128];
         snprintf(d1, sizeof d1, "  (bass %.4f -> %.4f, treble %.5f -> %.5f)",
@@ -545,7 +549,7 @@ int main()
               "changing Q does not change level", d2);
 
         if (auto* q = proc.getState().getParameter("q_tracking"))
-            q->setValueNotifyingHost(q->convertTo0to1(0.217f));
+            q->setValueNotifyingHost(q->convertTo0to1(0.056f));
         proc.prepareToPlay(sr, block);
     }
 

@@ -75,8 +75,8 @@ inline const std::vector<Spec>& table()
 
         // --- tone bar: what the tine is mounted on --------------------------
         { "tone_level",      "Tone Level",      "Tone Bar", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
-        { "tone_decay",      "Tone Decay",      "Tone Bar", Unit::Q,          1.0f,  4000.0f, 1334.0f, true },
-        { "q_tracking",      "Decay Tracking",  "Tone Bar", Unit::Ratio,      0.0f,     1.0f,  0.217f, true },
+        { "tone_decay",      "Tone Decay",      "Tone Bar", Unit::Q,          1.0f,  4000.0f, 1750.0f, true },
+        { "q_tracking",      "Decay Tracking",  "Tone Bar", Unit::Ratio,      0.0f,     1.0f,  0.056f, true },
         { "tone_release",    "Tone Release",    "Tone Bar", Unit::Q,          1.0f,  2000.0f,   30.0f, true  },
         { "sub_level",       "Sub Level",       "Tone Bar", Unit::Decibels, -100.0f,     0.0f,  -30.0f, false },
         { "sub_ratio",       "Sub Ratio",       "Tone Bar", Unit::Ratio,      0.2f,     1.0f,   0.55f, true  },

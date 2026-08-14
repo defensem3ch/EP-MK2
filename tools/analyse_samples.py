@@ -24,6 +24,9 @@ import os
 import re
 import sys
 
+import collections
+import statistics
+
 import numpy as np
 import soundfile as sf
 
@@ -62,6 +65,7 @@ def load_metadata():
 
     out = []
     for i, path in enumerate(files):
+        info = sf.info(path)
         out.append(
             dict(
                 path=path,
@@ -69,9 +73,39 @@ def load_metadata():
                 velocity=int(names[i][0], 16),
                 vel_range=(vlo[i], vhi[i]),
                 name=names[i][1],
+                duration=info.frames / info.samplerate,
+                suspect=None,
             )
         )
     return out
+
+
+def validate(meta):
+    """Find samples that did not capture properly, before they poison a curve.
+
+    A single bad sample matters more than it sounds: it is one point on a
+    13-to-25 point curve, and if it lands in the middle of the keyboard it
+    silently bends whatever is fitted through it.  Renders do fail -- one note
+    in this set came back at 0.38 s against its neighbours' 10.09 s.
+
+    The test is per pitch, against that pitch's own median, because high notes
+    are legitimately shorter: the top octave decays to nothing in under a
+    second and Renoise trims the silence.  Comparing everything to one global
+    length would condemn the whole treble.
+    """
+    by_pitch = collections.defaultdict(list)
+    for m in meta:
+        by_pitch[m["note"]].append(m)
+
+    suspect = []
+    for note, rows in by_pitch.items():
+        median = statistics.median(r["duration"] for r in rows)
+        for r in rows:
+            if r["duration"] < median * 0.5:
+                r["suspect"] = (f"{r['duration']:.2f} s against a "
+                                f"{median:.2f} s median for this pitch")
+                suspect.append(r)
+    return suspect
 
 
 def load_mono(path):
@@ -208,6 +242,17 @@ def decay_q(x, rate, freq, skip=0.05, tail=0.03, until=None):
     if seg.max() <= 0:
         return None
 
+    # Stop where the partial reaches the noise floor.  Past that the envelope
+    # flattens out, and including it bends the fitted slope towards zero --
+    # which reads as a much higher Q than the instrument has.  Several notes
+    # showed 90 dB of "decay", which is the floor, not the tine.
+    floor = seg[0] * (10.0 ** (-50.0 / 20.0))
+    usable = np.nonzero(seg < floor)[0]
+    if len(usable) and usable[0] > win:
+        seg = seg[: usable[0]]
+    if len(seg) < win:
+        return None
+
     y = np.log(np.maximum(seg, seg.max() * 1e-6))
     tt = np.arange(len(seg)) / rate
     slope, intercept = np.polyfit(tt, y, 1)
@@ -248,7 +293,7 @@ def trustworthy(d):
     return d is not None and d["r2"] >= 0.90 and d["span_db"] >= 3.0
 
 
-def model_q(note, ref_q=1334.0, tracking=0.217):
+def model_q(note, ref_q=1750.0, tracking=0.056):
     """What EP-MK2 currently uses, for comparison -- see ROADMAP 1.3."""
     return ref_q * 2 ** (tracking * (note - 69) / 12.0)
 
@@ -266,11 +311,22 @@ def main():
         sys.exit(f"no samples in {SAMPLES} -- unzip the .xrni there first")
 
     meta = load_metadata()
+
+    suspect = validate(meta)
+    if suspect:
+        print(f"Excluding {len(suspect)} sample(s) that did not capture:")
+        for r in suspect:
+            print(f"  note {r['note']}, velocity 0x{r['velocity']:02X}: {r['suspect']}")
+        print()
+        meta = [m for m in meta if m["suspect"] is None]
+    results_note = "excluded: " + "; ".join(
+        f"note {r['note']} vel 0x{r['velocity']:02X}" for r in suspect) if suspect else ""
+
     notes = sorted({m["note"] for m in meta})
     if args.pitch:
         notes = [n for n in notes if n in args.pitch]
 
-    results = dict(pitches={}, velocity={})
+    results = dict(pitches={}, velocity={}, excluded=results_note)
     analysed = {}
 
     for note in notes:
@@ -324,15 +380,24 @@ def main():
                       key=lambda p: abs(p["ratio"] - 1.0))["decay"])
               for n in notes if analysed.get(n) and analysed[n]["partials"]]
     usable = [(n, d) for n, d in usable if trustworthy(d)]
-    if len(usable) >= 2:
-        lo, hi = usable[0], usable[-1]
-        octaves = (hi[0] - lo[0]) / 12.0
-        slope = math.log2(hi[1]["q"] / lo[1]["q"]) / octaves if octaves else 0.0
-        print(f"\n  measurable range: note {lo[0]} Q {lo[1]['q']:.0f} "
-              f"-> note {hi[0]} Q {hi[1]['q']:.0f}")
-        print(f"  implied tracking: {slope:.3f} octaves of Q per octave of pitch "
-              f"(model uses 0.217)")
-        results["q_tracking_measured"] = slope
+    if len(usable) >= 3:
+        # Least squares through every usable point, not just the endpoints:
+        # the endpoints alone are two samples of a noisy quantity, and they
+        # disagreed with the body of the data.
+        xs = np.array([(n - 69) / 12.0 for n, _ in usable])
+        ys = np.array([math.log2(d["q"]) for _, d in usable])
+        slope, intercept = np.polyfit(xs, ys, 1)
+        pred = slope * xs + intercept
+        ss_res = float(((ys - pred) ** 2).sum())
+        ss_tot = float(((ys - ys.mean()) ** 2).sum())
+        r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+
+        print(f"\n  {len(usable)} usable points, note {usable[0][0]} to {usable[-1][0]}")
+        print(f"  least-squares tracking: {slope:+.3f} octaves of Q per octave "
+              f"of pitch (r2 {r2:.2f}); the model now uses +0.056")
+        print(f"  Q at A4 implied: {2 ** intercept:.0f}; the model now uses 1750")
+        results["q_fit"] = dict(tracking=float(slope), q_at_a4=float(2 ** intercept),
+                                r2=r2, points=len(usable))
 
     # ---- 2. inharmonic partials -------------------------------------------
     print("\nPartials above the fundamental, flagged harmonic or inharmonic")

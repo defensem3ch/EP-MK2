@@ -7,44 +7,58 @@ ours and belong here.
 
 ## kontakt-mki.json
 
-Kontakt Factory MkI, 13 pitches (MIDI 28-100, a tritone apart) x 12 velocity
-layers, 48 kHz.
+Kontakt Factory MkI, **25 pitches (MIDI 28-100, every 3 semitones) x 12
+velocity layers**, 48 kHz, notes held for up to 10 s.
 
-### Known limitation of this capture
+One sample failed to capture -- note 61 at velocity 0x4A came back at 0.38 s
+against a 10.09 s median for that pitch -- and is excluded automatically.
+`validate()` compares each sample against **its own pitch's** median rather
+than a global one, because the top octave is legitimately short: notes 97 and
+100 decay to nothing inside a second and Renoise trims the silence. A global
+length test would have condemned the whole treble.
 
-The samples run about 1 second and **hold for only ~0.5 s**, then fade to the
-noise floor in roughly 100 ms. That fade is a note-off, not the instrument
-decaying.
+## What it says
 
-It matters more than it sounds. A 41 Hz partial with a Q around 1000 falls less
-than a dB in half a second, so **the bass decay is not measurable from this
-capture at all** -- and fitting through the fade instead reports a Q of about
-30, which is off by a factor of thirty. `find_release()` exists to stop that,
-and `trustworthy()` refuses to quote a fit that had less than 3 dB of decay to
-work with.
+### Q of the fundamental: no trend, and a lot of scatter
 
-A re-capture holding each note for 20-30 s would make the whole keyboard
-measurable.
+18 usable fits, note 49 to note 100. Least squares over all of them:
 
-## What it says so far
+```
+tracking  +0.056 octaves of Q per octave of pitch   (r2 = 0.02)
+Q at A4    1751
+```
 
-**Sub-fundamental — confirmed, and lower than expected.** Present from note 28
-to 70 at **0.42-0.60 x f0**, −32 to −60 dB, absent above. `ROADMAP.md` 1.2
-expected 0.58-0.83 from the literature; the bottom of the keyboard agrees, the
-middle sits lower.
+**An r-squared of 0.02 means there is no reliable trend of Q against pitch in
+this instrument.** Q wanders between about 900 and 3600 with no pattern. Two
+earlier readings were wrong and are worth recording as such:
 
-**Inharmonic modes live in the attack.** Measured across the whole held note,
-the spectrum is almost purely integer harmonics -- because at Q≈225 a mode at
-7 x f0 is 60 dB down within ~120 ms. Measured over the first 120 ms instead:
-note 28 at 6.64x, 14.08x, 16.09x; note 34 at 6.62x, 25.08x; note 70 at 7.24x.
-Broadly consistent with the model's 7.1 and 20.4, not a clean match.
+* The `+0.217` the model used came from a 731-2175 range attributed to Shear
+  (UCSB 2011, Table 2.1), which is not verifiable against any paper on hand.
+  Not supported by measurement.
+* An earlier `-0.108` from this same tool used only the first and last usable
+  points. Two samples of a scattered quantity are not a slope.
 
-**Q of the fundamental — measurable only from note 70 up**, where it reads
-1208, 993, 2077, 2118, 1504, 1002 at notes 70, 76, 82, 88, 94, 100. Noisy and
-not monotonic. The implied slope is **−0.108 octaves of Q per octave of pitch**,
-where the model currently assumes **+0.217, rising**.
+The model now uses the measured 1750 at A4 and a nearly flat +0.056.
 
-That is worth flagging and *not* worth acting on yet: six scattered points, no
-monotonic trend, and a sampled library's decay may be shaped by the sampler's
-own envelope rather than by the instrument. If the sign survives a longer
-capture, the 1.3 curve is backwards.
+Fitting the decay also needed bounding to the clean exponential region. Several
+notes reported 90 dB of "decay", which was the fit running into the noise floor
+and flattening -- reading as a far higher Q than the instrument has. The fit now
+stops 50 dB below where the partial starts.
+
+**The scatter is probably the real finding.** Tines are individually clamped
+and individually variable, so per-note variation in Q is physically plausible,
+and it belongs with `ROADMAP` 2.3 (a note that is not identical every time)
+rather than as a curve across the keyboard.
+
+### Sub-fundamental: real, and below what the papers said
+
+Present from note 28 to 70 at **0.42-0.60 x f0**, absent above. The literature
+expected 0.58-0.83. Implemented at 0.55 -- see ROADMAP 1.2.
+
+### Inharmonic modes live in the attack
+
+Measured over a whole held note the spectrum is almost purely integer
+harmonics, because at Q around 225 a mode at 7 x f0 is 60 dB down within
+~120 ms. Over the first 120 ms instead: 6.6x, 7.2x, and a spread of higher
+inharmonic peaks. Broadly consistent with the model's 7.1 and 20.4, not a
+clean match.

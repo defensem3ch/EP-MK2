@@ -49,20 +49,23 @@ struct VoiceParams {
     float tineSendLin = 0.000141f;   // -77 dB
 
     // tone bar
-    // Q of the fundamental *at the reference note* (A4).  Q now varies across
-    // the keyboard rather than being one global value -- see toneQTracking.
-    // 1334 is chosen so the curve passes through the range reported for a real
-    // instrument, 731 at the bottom of the keyboard to 2175 at the top.
-    float toneQ = 1334.0f;
-    // Octaves of Q per octave of pitch.  0.217 spans 731 to 2175 over MIDI
-    // notes 21 to 108; 0 restores a single global Q.
+    // Q of the fundamental *at the reference note* (A4), measured from the
+    // reference library: 18 usable decay fits from note 49 to note 100 imply
+    // 1751.  This replaces 1334, which came from a half-remembered range.
+    float toneQ = 1750.0f;
+    // Octaves of Q per octave of pitch.  0 gives one global Q.
     //
-    // PROVISIONAL.  The 731-2175 range is from Shear (UCSB 2011, Table 2.1)
-    // and is not verifiable from the papers on hand, and the shape between the
-    // endpoints is assumed log-linear rather than measured.  The sample
-    // benchmark gives per-partial decay times directly and should replace
-    // both -- see docs/ROADMAP.md Part 3.
-    float toneQTracking = 0.217f;
+    // Measured at +0.056, with an r-squared of 0.02 -- which is to say the
+    // library shows **no reliable trend of Q against pitch at all**, and the
+    // +0.217 previously here (from a range attributed to Shear 2011 that could
+    // not be checked against any paper on hand) is not supported.  The value
+    // kept is the least-squares estimate, and it is nearly flat on purpose.
+    //
+    // What the data does show is scatter: Q runs from about 900 to 3600 with
+    // no pattern in pitch.  On a real instrument that is believable -- tines
+    // are individually clamped and individually variable -- and it is a better
+    // fit for per-note variation (ROADMAP 2.3) than for a curve.
+    float toneQTracking = 0.056f;
     float toneReleaseQ = 30.0f;      // note-off
 
     // A partial *below* the fundamental, produced by the tone bar.  Measured
