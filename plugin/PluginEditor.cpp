@@ -5,7 +5,7 @@ using namespace epmk2::params;
 
 namespace {
 constexpr int kControlWidth  = 100;
-constexpr int kControlHeight = 104;
+constexpr int kControlHeight = 112;
 constexpr int kSectionHeader = 30;
 constexpr int kHeaderHeight  = 56;
 
@@ -76,6 +76,14 @@ void ParamControl::mouseExit(const juce::MouseEvent&)
 
 void ParamControl::paint(juce::Graphics& g)
 {
+    // A tint behind each control, so label, knob and value read as one object.
+    // Without it the value box sits at the bottom of its cell with the next
+    // row's label directly beneath, at the same spacing as the gap inside the
+    // control -- and the eye pairs the value with the wrong name.  This is the
+    // cheapest way to say which three things belong together.
+    g.setColour(juce::Colour(0xff2f2f2f));
+    g.fillRoundedRectangle(getLocalBounds().reduced(2, 1).toFloat(), 4.0f);
+
     g.setColour(juce::Colour(0xffe4e4e4));
     g.setFont(juce::FontOptions(kLabelFont, juce::Font::bold));
     // Two lines, so a long name wraps instead of running into its neighbour.
@@ -88,9 +96,12 @@ void ParamControl::resized()
     auto r = getLocalBounds();
     r.removeFromTop(kLabelHeight);
     if (isToggle)
-        button.setBounds(r.withSizeKeepingCentre(36, 36));
+        button.setBounds(r.withTrimmedBottom(10).withSizeKeepingCentre(36, 36));
     else
-        slider.setBounds(r.reduced(2, 0).withTrimmedBottom(5));
+        // The trim is the gap *between* rows.  It has to be larger than the
+        // space between the knob and its own value, or proximity groups them
+        // the wrong way round.
+        slider.setBounds(r.reduced(4, 0).withTrimmedBottom(10));
 }
 
 //==============================================================================
