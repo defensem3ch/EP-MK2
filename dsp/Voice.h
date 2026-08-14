@@ -6,7 +6,7 @@
 //     |                              |                            |
 //     |                              +--> tone bar level ---------+--> out
 //     |                                                           |
-//     +-> tine highpass -> gate -> 2 tine resonators --+--> level -+
+//     +-> tine highpass -> gate -> 3 tine resonators --+--> level -+
 //     |                                                |
 //     |                                     tine send -+-> pickup sum
 //     +-> hammer level ------------------------------------------> out
@@ -29,11 +29,22 @@ namespace epmk2 {
 // Per-voice parameters, already converted out of the dB the GUI uses.
 // `*Lin` fields are linear gains; frequencies are Hz; Q values are Q.
 struct VoiceParams {
-    // tine
-    float tineRatio1 = 7.1f;      // measured: Gabrielli et al. 2020
-    float tineRatio2 = 20.4f;
+    // tine.  Three inharmonic modes; the ratios are measured, not derived --
+    // an ideal cantilever would give 6.27 and 17.55, which is audibly a
+    // different instrument (see docs/MODEL-NOTES.md).
+    float tineRatio1 = 7.1f;      // measured: Gabrielli et al. 2020, sigma 0.3
+    float tineRatio2 = 20.4f;     //                                 sigma 0.4
+    float tineRatio3 = 39.7f;
     float tineHighpassHz = 20.0f;
     float tineQ = 225.0f;
+    // Relative levels of modes 2 and 3.  Mode 1 is the reference at unity.
+    float tineMode2LevelLin = 1.0f;
+    float tineMode3LevelLin = 0.501187f;  // -6 dB
+    // How much faster the higher modes damp: Q_n = tineQ * (ratio1/ratio_n)^d.
+    // 0 gives every mode the same Q, which is what the model did before mode 3
+    // existed.  Physically this should be positive; the value wants measuring
+    // off the sample benchmark rather than guessing, so it defaults to off.
+    float tineModeDamping = 0.0f;
     float tineLevelLin = 1.0f;
     float tineSendLin = 0.000141f;   // -77 dB
 
@@ -77,6 +88,7 @@ public:
         toneBar.reset();
         tine1.reset();
         tine2.reset();
+        tine3.reset();
         tineHighpass.reset();
         pickupLowpass.reset();
         bodyHighpass.reset();
@@ -216,8 +228,12 @@ public:
         const float toneRaw = toneBar.process(strike + release) * 0.707946f;
 
         // --- tine ----------------------------------------------------------
+        // Modes above Nyquist are skipped rather than run: see configure().
         const float tineIn = tineHighpass.process(strike) * gate;
-        const float tineRaw = tine1.process(tineIn) + tine2.process(tineIn);
+        float tineRaw = 0.0f;
+        if (mode1Active) tineRaw += tine1.process(tineIn);
+        if (mode2Active) tineRaw += tine2.process(tineIn) * p.tineMode2LevelLin;
+        if (mode3Active) tineRaw += tine3.process(tineIn) * p.tineMode3LevelLin;
 
         // --- pickup --------------------------------------------------------
         const float pickupIn = pickupLowpass.process(strike * p.pickupAttackLin + toneRaw)
@@ -262,8 +278,34 @@ public:
         const double sr = sampleRate;
         toneBar.setCoeffs(designBandpass(frequency,
                                          releasing ? p.toneReleaseQ : p.toneQ, sr));
-        tine1.setCoeffs(designBandpass(frequency * p.tineRatio1, p.tineQ, sr));
-        tine2.setCoeffs(designBandpass(frequency * p.tineRatio2, p.tineQ, sr));
+
+        // A mode whose frequency is past Nyquist does not exist on the real
+        // instrument at that pitch, and must be skipped rather than clamped.
+        // designBandpass clips to 20 kHz, so clamping parks a Q-225 resonator
+        // just under Nyquist where nothing should be at all -- which is what
+        // used to happen to mode 2 above ~1 kHz, and is the known cause of the
+        // 4 dB error at the top of the keyboard.
+        const double limit = kNyquistFraction * sr;
+        auto setMode = [&](Biquad& b, float ratio, bool& active) {
+            const double f = (double)frequency * (double)ratio;
+            active = f > 0.0 && f < limit;
+            if (active) {
+                // Higher modes damp faster.  With tineModeDamping at 0 every
+                // mode keeps the same Q, which is the pre-mode-3 behaviour.
+                double q = (double)p.tineQ;
+                if (p.tineModeDamping != 0.0f && ratio > 0.0f && p.tineRatio1 > 0.0f)
+                    q *= std::pow((double)p.tineRatio1 / (double)ratio,
+                                  (double)p.tineModeDamping);
+                if (q < 0.5) q = 0.5;
+                b.setCoeffs(designBandpass((float)f, (float)q, sr));
+            } else {
+                // Clear it so it cannot ring on if it becomes active again.
+                b.reset();
+            }
+        };
+        setMode(tine1, p.tineRatio1, mode1Active);
+        setMode(tine2, p.tineRatio2, mode2Active);
+        setMode(tine3, p.tineRatio3, mode3Active);
         tineHighpass.setCoeffs(designHighpass(p.tineHighpassHz, kFilterQ, sr));
         pickupLowpass.setCoeffs(designLowpass(p.pickupLowpassHz, kFilterQ, sr));
         bodyHighpass.setCoeffs(designHighpass(frequency, kFilterQ, sr));
@@ -283,6 +325,11 @@ private:
     // The Q the patch hands to every plain lowpass/highpass in the voice.
     static constexpr float kFilterQ = 0.404061f;
 
+    // Modes are skipped above this fraction of the sample rate.  Short of
+    // Nyquist itself: a high-Q bandpass placed right at the edge is both
+    // numerically poor and inaudible.
+    static constexpr float kNyquistFraction = 0.45f;
+
     // -80 dBFS.  Below this a voice cannot be heard even solo, and holding on
     // any longer just burns CPU: with the pedal down the tone bar's Q of 1642
     // means a note takes the better part of a minute to reach -100 dB.
@@ -300,7 +347,8 @@ private:
     float  note = 69.0f;
     float  velocityAmp = 1.0f;
 
-    Biquad toneBar, tine1, tine2, tineHighpass, pickupLowpass, bodyHighpass;
+    Biquad toneBar, tine1, tine2, tine3, tineHighpass, pickupLowpass, bodyHighpass;
+    bool mode1Active = true, mode2Active = true, mode3Active = false;
     OnePole keytrack1, keytrack2;
 
     float strikeRamp = 0.0f, strikeInc = 0.0f, strikePeriodSamples = 0.0f;

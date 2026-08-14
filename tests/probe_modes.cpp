@@ -1,0 +1,95 @@
+// Measure how much each tine mode actually contributes, by rendering one note
+// straight from the DSP (no JUCE) and reading the spectrum at each mode
+// frequency with a Goertzel filter.
+//
+//   g++ -O2 -std=c++17 -o probe_modes tests/probe_modes.cpp && ./probe_modes
+#include <cmath>
+#include <cstdio>
+#include <vector>
+
+#include "../dsp/Engine.h"
+
+namespace {
+
+// Energy at one frequency over the whole buffer.
+double goertzel(const std::vector<float>& x, double freq, double sr)
+{
+    const double w = 2.0 * M_PI * freq / sr;
+    const double c = 2.0 * std::cos(w);
+    double s0 = 0.0, s1 = 0.0, s2 = 0.0;
+    for (float v : x) {
+        s0 = v + c * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+    }
+    return std::sqrt(s1 * s1 + s2 * s2 - c * s1 * s2) / x.size();
+}
+
+std::vector<float> render(const epmk2::EngineParams& p, int note, double sr, int n)
+{
+    epmk2::Engine e;
+    e.prepare(sr, 8);
+    e.noteOn(note, 110, p);
+    std::vector<float> out;
+    out.reserve(n);
+    for (int i = 0; i < n; ++i)
+        out.push_back(e.process(p));
+    return out;
+}
+
+double dB(double x) { return 20.0 * std::log10(std::max(1.0e-12, x)); }
+
+} // namespace
+
+int main()
+{
+    const double sr = 48000.0;
+    const int n = int(sr);            // one second
+    const int note = 45;              // A2, ~110 Hz
+
+    epmk2::EngineParams p;
+    const double f0 = p.baseFreq * std::pow(2.0, (note - p.baseNote) / 12.0);
+
+    printf("note %d, f0 %.1f Hz\n\n", note, f0);
+    printf("  mode frequencies: 1 = %.0f Hz, 2 = %.0f Hz, 3 = %.0f Hz\n\n",
+           f0 * p.voice.tineRatio1, f0 * p.voice.tineRatio2, f0 * p.voice.tineRatio3);
+
+    // Level at each mode frequency, with the whole tine path on and off.
+    auto report = [&](const char* label, const epmk2::EngineParams& q) {
+        const auto x = render(q, note, sr, n);
+        double peak = 0.0;
+        for (float v : x) peak = std::max(peak, (double)std::fabs(v));
+        printf("  %-22s peak %7.4f | f0 %7.1f dB | m1 %7.1f dB | m2 %7.1f dB | m3 %7.1f dB\n",
+               label, peak,
+               dB(goertzel(x, f0, sr)),
+               dB(goertzel(x, f0 * q.voice.tineRatio1, sr)),
+               dB(goertzel(x, f0 * q.voice.tineRatio2, sr)),
+               dB(goertzel(x, f0 * q.voice.tineRatio3, sr)));
+    };
+
+    report("defaults", p);
+
+    { auto q = p; q.voice.tineLevelLin = 1.0e-5f; report("whole tine path off", q); }
+    { auto q = p; q.voice.tineMode3LevelLin = 1.0e-5f; report("mode 3 off", q); }
+    { auto q = p; q.voice.tineMode3LevelLin = 1.0f;    report("mode 3 at 0 dB", q); }
+    { auto q = p; q.voice.tineMode2LevelLin = 1.0e-5f; report("mode 2 off", q); }
+
+    // How much of the excitation actually reaches each mode?  The strike is a
+    // single raised-cosine cycle at the note's own period, so its spectrum
+    // rolls off steeply well before 20x or 40x the fundamental.
+    printf("\n  excitation spectrum (single raised-cosine cycle at f0):\n");
+    const double period = sr / f0;
+    std::vector<float> strike;
+    strike.reserve(n);
+    for (int i = 0; i < n; ++i) {
+        const double ramp = 1.0 - i / period;
+        strike.push_back(ramp > 0.0
+            ? float(std::cos(2.0 * M_PI * (0.75 + 0.5 * ramp))) : 0.0f);
+    }
+    for (double r : { 1.0, (double)p.voice.tineRatio1,
+                      (double)p.voice.tineRatio2, (double)p.voice.tineRatio3 })
+        printf("    at %5.1f x f0 (%8.1f Hz): %7.1f dB\n",
+               r, f0 * r, dB(goertzel(strike, f0 * r, sr)));
+
+    return 0;
+}

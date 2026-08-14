@@ -36,6 +36,10 @@ bool apply(const juce::AudioProcessorValueTreeState& tree,
         // Tine
         else if (id == "tine_ratio1")     p.voice.tineRatio1 = v;
         else if (id == "tine_ratio2")     p.voice.tineRatio2 = v;
+        else if (id == "tine_ratio3")     p.voice.tineRatio3 = v;
+        else if (id == "tine_mode2_lvl")  p.voice.tineMode2LevelLin = lin;
+        else if (id == "tine_mode3_lvl")  p.voice.tineMode3LevelLin = lin;
+        else if (id == "tine_mode_damp")  p.voice.tineModeDamping = v;
         else if (id == "tine_hipass")     p.voice.tineHighpassHz = v;
         else if (id == "tine_decay")      p.voice.tineQ = v;
         else if (id == "tine_level")      p.voice.tineLevelLin = lin;

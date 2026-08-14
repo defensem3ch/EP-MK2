@@ -12,30 +12,72 @@ the current model cannot express at all.
 
 ## Part 1 — Structure the measurements demand
 
-### 1.1 More tine modes (7.1, 20.4, **39.7**)
+### 1.1 More tine modes (7.1, 20.4, **39.7**) — **done, and it exposed 1.6**
 
-**Now:** two bandpass resonators, `tine1` and `tine2`, at `f0 * 7.1` and
-`f0 * 20.4`, summed, sharing one `tineQ`.
+**Done:** a third mode at 39.7 with its own level, per-mode Q via a
+`Mode Damping` exponent (`Q_n = tineQ * (ratio1/ratio_n)^d`, default 0 so modes
+1 and 2 keep their old behaviour), and — the real fix — **Nyquist culling**.
 
-**Measured:** Gabrielli et al. (JASA 148(5), 2020) found modes at 7.1 (σ 0.3),
-20.4 (σ 0.4) and 39.7.
+A mode whose frequency passes `0.45 * SR` is now *skipped*, not clamped.
+`designBandpass` clips to 20 kHz, so the old code parked a Q-225 resonator just
+under Nyquist wherever a mode should have ceased to exist. Mode 2 did this
+above roughly C6, and it is the known cause of the 4 dB error at the top of the
+keyboard. Verified by the mode level controls being **bit-identical** no-ops at
+note 108 and audible at note 45.
 
-**Implementation.** Structurally trivial — a third `Biquad` in `Voice`, summed
-with the others. Two things are not trivial:
+**But adding mode 3 changed almost nothing audible, and that is the finding.**
+See 1.6 — the excitation cannot reach these modes in the first place.
 
-* **Nyquist.** At 48 kHz, `39.7 * f0 < 24 kHz` only below `f0 ≈ 604 Hz`, i.e.
-  roughly D5. Above that the mode does not exist and must be *skipped*, not
-  clamped — `designBandpass` clamps to 20 kHz today, which parks a high-Q
-  resonator just under Nyquist and is worse than omitting it. The same applies
-  to mode 2 at the top: `20.4 * f0` passes Nyquist at `f0 ≈ 1176 Hz` (D6), and
-  this is already the known cause of the 4 dB parity gap at note 88.
-  So: per-mode `enabled = (ratio * f0 < 0.45 * sampleRate)`.
-* **Per-mode Q and level.** One shared `tineQ` is a simplification. Higher
-  modes damp faster in every measurement. Give each mode its own Q multiplier
-  and level.
+### 1.6 The hammer excitation is far too narrowband — **new, and now the priority**
 
-**Verify:** FFT a rendered note, check for peaks at the expected ratios; sweep
-the whole keyboard and confirm no resonator is ever placed above `0.45 * SR`.
+Measured with `tests/probe_modes.cpp`, at A2 (110 Hz):
+
+| | excitation reaching it | level in the output |
+| --- | --- | --- |
+| fundamental | −54 dB | −14.4 dB |
+| mode 1 (7.1x, 781 Hz) | −91 dB | −54.7 dB |
+| mode 2 (20.4x, 2244 Hz) | −119 dB | −79.9 dB |
+| mode 3 (39.7x, 4367 Hz) | −125 dB | −89.9 dB |
+
+The excitation is a **single raised-cosine cycle at the note's own period**. Its
+spectrum collapses above f0, so mode 2 is driven 65 dB below the fundamental and
+mode 3 by 71 dB. The tine modes — the thing that makes a Rhodes sound like a
+Rhodes — arrive 40 to 75 dB down and are effectively inaudible.
+
+This explains a great deal about the model as inherited:
+
+* Why the instrument needs +15 dB of `pickup_gain` into a waveshaper to sound
+  bright at all. **The harmonics are coming from the nonlinearity, not from the
+  tine.** That is backwards from the physics.
+* Why `pickup_symmetry` is far and away the strongest timbral control, and why
+  getting its units wrong turned the instrument into a Wurlitzer.
+* Why adding measured mode ratios has so little effect: the ratios are right,
+  but nothing is driving them.
+
+**The physical problem.** A Rhodes hammer is a small neoprene tip striking a
+stiff steel tine; contact is short, well under a millisecond, which is what
+makes the strike broadband enough to excite modes into the kHz. Here the pulse
+lasts one whole period — 9 ms at A2, and **36 ms at A0**, which is not a hammer
+strike at all. Worse, tying the width to `1/f0` means the excitation gets
+*relatively* softer as you go down the keyboard, which is the opposite of a real
+instrument where contact time is roughly pitch-independent.
+
+**Implementation.** Decouple excitation width from pitch: a contact-time
+parameter in milliseconds, defaulting to something near 0.5–1 ms, with the
+raised-cosine shape kept. Velocity should shorten contact as well as raise
+amplitude — that is where a real instrument's "harder strike is brighter"
+behaviour comes from, and it would make the velocity layers in the benchmark
+fittable.
+
+**Expect this to change the sound substantially**, and to need `pickup_gain`
+and the tine send rebalanced afterwards — probably downward, since brightness
+will start coming from the right place. The six factory presets will need
+revisiting. That is a good sign, not a bad one, but it should not be done
+casually, and the parity story with MK1 ends here by design.
+
+**Verify:** re-run `tests/probe_modes.cpp` and check the modes come up out of
+the noise; confirm the velocity→brightness curve against the benchmark's 12
+velocity layers.
 
 ### 1.2 Sub-fundamental (0.58–0.83)
 

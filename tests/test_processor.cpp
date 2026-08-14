@@ -285,6 +285,90 @@ int main()
         renderNote("pickup_symmetry", 7.0f);
     }
 
+    // ---- tine modes and the Nyquist cull ---------------------------------
+    // A mode past Nyquist has to be skipped, not clamped.  designBandpass
+    // clips to 20 kHz, so clamping parks a Q-225 resonator just under Nyquist
+    // where the real instrument has nothing -- which is what used to happen to
+    // mode 2 above roughly C6.
+    //
+    // The measurement is a Goertzel at the mode's own frequency, not broadband
+    // energy.  The modes sit 40-75 dB below the fundamental (see
+    // tests/probe_modes.cpp and docs/ROADMAP.md 1.6), so they are invisible in
+    // any wideband measure even when working perfectly.
+    {
+        auto goertzel = [](const std::vector<float>& x, double freq, double rate) {
+            const double w = 2.0 * M_PI * freq / rate;
+            const double c = 2.0 * std::cos(w);
+            double s0 = 0.0, s1 = 0.0, s2 = 0.0;
+            for (float v : x) { s0 = v + c * s1 - s2; s2 = s1; s1 = s0; }
+            return std::sqrt(std::max(0.0, s1*s1 + s2*s2 - c*s1*s2)) / std::max<size_t>(1, x.size());
+        };
+
+        auto renderNoteAt = [&](int midiNote, const char* id, float valueDb,
+                                std::vector<float>& out) {
+            if (auto* q = proc.getState().getParameter(id))
+                q->setValueNotifyingHost(q->convertTo0to1(valueDb));
+            proc.prepareToPlay(sr, block);
+
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+
+            juce::MidiBuffer m;
+            m.addEvent(juce::MidiMessage::noteOn(1, midiNote, (juce::uint8)110), 0);
+            juce::AudioBuffer<float> b(2, block);
+            out.clear();
+            for (int i = 0; i < blocksPerSecond; ++i) {
+                b.clear();
+                proc.processBlock(b, m);
+                m.clear();
+                for (int n = 0; n < block; ++n)
+                    out.push_back(b.getSample(0, n));
+            }
+            renderPeak(proc, panic, 1, block);
+        };
+
+        // Note 45 is ~110 Hz: modes at 781 Hz, 2244 Hz and 4367 Hz, all real.
+        const double f0low = 110.0;
+        std::vector<float> off, on;
+
+        renderNoteAt(45, "tine_mode3_lvl", -100.0f, off);
+        renderNoteAt(45, "tine_mode3_lvl",    0.0f, on);
+        const double m3Off = goertzel(off, f0low * 39.7, sr);
+        const double m3On  = goertzel(on,  f0low * 39.7, sr);
+        char d1[96]; snprintf(d1, sizeof d1, "  (%.1f -> %.1f dB)",
+                              20.0 * std::log10(std::max(1e-12, m3Off)),
+                              20.0 * std::log10(std::max(1e-12, m3On)));
+        check(m3On > m3Off * 2.0, "mode 3 sounds where it fits below Nyquist", d1);
+
+        renderNoteAt(45, "tine_mode2_lvl", -100.0f, off);
+        renderNoteAt(45, "tine_mode2_lvl",    0.0f, on);
+        const double m2Off = goertzel(off, f0low * 20.4, sr);
+        const double m2On  = goertzel(on,  f0low * 20.4, sr);
+        char d2[96]; snprintf(d2, sizeof d2, "  (%.1f -> %.1f dB)",
+                              20.0 * std::log10(std::max(1e-12, m2Off)),
+                              20.0 * std::log10(std::max(1e-12, m2On)));
+        check(m2On > m2Off * 2.0, "mode 2 sounds where it fits below Nyquist", d2);
+
+        // Note 108 is ~4186 Hz: modes at 85 kHz and 166 kHz, neither of which
+        // can exist at 48 kHz.  Their controls must be completely inert --
+        // bit-identical output, because the resonators are never run.
+        renderNoteAt(108, "tine_mode3_lvl", -100.0f, off);
+        renderNoteAt(108, "tine_mode3_lvl",    0.0f, on);
+        check(off == on, "mode 3 is inert where it would alias");
+
+        renderNoteAt(108, "tine_mode2_lvl", -100.0f, off);
+        renderNoteAt(108, "tine_mode2_lvl",    0.0f, on);
+        check(off == on, "mode 2 is inert where it would alias");
+
+        // Restore the defaults this block moved.
+        if (auto* q = proc.getState().getParameter("tine_mode3_lvl"))
+            q->setValueNotifyingHost(q->convertTo0to1(-6.0f));
+        if (auto* q = proc.getState().getParameter("tine_mode2_lvl"))
+            q->setValueNotifyingHost(q->convertTo0to1(0.0f));
+        proc.prepareToPlay(sr, block);
+    }
+
     // ---- factory presets -------------------------------------------------
     // A preset that loads but sounds like the one before it is not a preset,
     // so each is measured for level and brightness rather than merely checked

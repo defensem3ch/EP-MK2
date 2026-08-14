@@ -36,7 +36,11 @@ inline const std::vector<Spec>& table()
         { "interval",        "Interval",        "Tuning", Unit::Ratio,      0.0f,    20.0f,    2.0f, true  },
         // --- tine -----------------------------------------------------------
         { "tine_ratio1",     "Tine Ratio 1",    "Tine", Unit::Ratio,      0.0f,    30.0f,    7.1f, true  },
-        { "tine_ratio2",     "Tine Ratio 2",    "Tine", Unit::Ratio,      0.0f,    30.0f,   20.4f, true  },
+        { "tine_ratio2",     "Tine Ratio 2",    "Tine", Unit::Ratio,      0.0f,    60.0f,   20.4f, true  },
+        { "tine_ratio3",     "Tine Ratio 3",    "Tine", Unit::Ratio,      0.0f,    60.0f,   39.7f, true  },
+        { "tine_mode2_lvl",  "Mode 2 Level",    "Tine", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
+        { "tine_mode3_lvl",  "Mode 3 Level",    "Tine", Unit::Decibels, -100.0f,     0.0f,   -6.0f, false },
+        { "tine_mode_damp",  "Mode Damping",    "Tine", Unit::Ratio,      0.0f,     2.0f,    0.0f, true  },
         { "tine_hipass",     "Tine High-Pass",  "Tine", Unit::Hertz,     20.0f, 20000.0f,   20.0f, true  },
         { "tine_decay",      "Tine Decay",      "Tine", Unit::Q,          1.0f,  2000.0f,  225.0f, true  },
         { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
