@@ -616,6 +616,69 @@ int main()
         proc.prepareToPlay(sr, block);
     }
 
+    // ---- sub-fundamental -------------------------------------------------
+    // A partial below f0, produced by the tone bar.  Measured in the reference
+    // library at 0.42-0.60 x f0 from note 28 to 70; the model places it at
+    // 0.55.  It has to survive the pickup's body highpass, which sits at f0
+    // and so attenuates everything below it -- the kind of interaction that
+    // silently makes a feature do nothing.
+    {
+        auto goertzel = [](const std::vector<float>& v, double freq, double rate) {
+            const double w = 2.0 * M_PI * freq / rate;
+            const double c = 2.0 * std::cos(w);
+            double s0 = 0.0, s1 = 0.0, s2 = 0.0;
+            for (float x : v) { s0 = x + c * s1 - s2; s2 = s1; s1 = s0; }
+            return std::sqrt(std::max(0.0, s1*s1 + s2*s2 - c*s1*s2))
+                   / std::max<size_t>(1, v.size());
+        };
+
+        auto renderAt = [&](int midiNote, float subDb, std::vector<float>& out) {
+            if (auto* q = proc.getState().getParameter("sub_level"))
+                q->setValueNotifyingHost(q->convertTo0to1(subDb));
+            proc.prepareToPlay(sr, block);
+
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+
+            juce::MidiBuffer m;
+            m.addEvent(juce::MidiMessage::noteOn(1, midiNote, (juce::uint8)110), 0);
+            juce::AudioBuffer<float> b(2, block);
+            out.clear();
+            for (int i = 0; i < blocksPerSecond; ++i) {
+                b.clear();
+                proc.processBlock(b, m);
+                m.clear();
+                for (int n = 0; n < block; ++n)
+                    out.push_back(b.getSample(0, n));
+            }
+            renderPeak(proc, panic, 1, block);
+        };
+
+        std::vector<float> off, on;
+        const double f0 = 440.0 * std::pow(2.0, (52 - 69) / 12.0);   // note 52
+        renderAt(52, -100.0f, off);
+        renderAt(52,    0.0f, on);
+        const double subOff = goertzel(off, f0 * 0.55, sr);
+        const double subOn  = goertzel(on,  f0 * 0.55, sr);
+        char sd[96];
+        snprintf(sd, sizeof sd, "  (%.1f -> %.1f dB at %.0f Hz)",
+                 20.0 * std::log10(std::max(1e-12, subOff)),
+                 20.0 * std::log10(std::max(1e-12, subOn)), f0 * 0.55);
+        check(subOn > subOff * 4.0, "the sub-fundamental reaches the output", sd);
+
+        // Below 20 Hz there is nothing to hear, and designBandpass would clamp
+        // it up to 20 Hz -- putting a resonator at a frequency the note does
+        // not have.  Note 21 puts the sub at 15 Hz, so it must be skipped.
+        renderAt(21, -100.0f, off);
+        renderAt(21,    0.0f, on);
+        check(off == on, "the sub is skipped when it falls below hearing");
+
+        if (auto* q = proc.getState().getParameter("sub_level"))
+            q->setValueNotifyingHost(q->convertTo0to1(-30.0f));
+        proc.prepareToPlay(sr, block);
+    }
+
     // ---- factory presets -------------------------------------------------
     // A preset that loads but sounds like the one before it is not a preset,
     // so each is measured for level and brightness rather than merely checked

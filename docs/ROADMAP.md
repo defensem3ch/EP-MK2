@@ -117,19 +117,36 @@ sat permanently saturated.
 * **The six factory presets were tuned against the old excitation** and want
   revisiting.
 
-### 1.2 Sub-fundamental (0.58–0.83)
+### 1.2 Sub-fundamental — **done, from measurement**
 
-**Measured:** the tone bar produces a partial *below* f0.
+A fourth resonator below the fundamental, driven by the same excitation as the
+tone bar and routed exactly like it -- into the pickup and into the direct sum
+-- because it is the same piece of metal. Controls are `Sub Level` (default
+−30 dB) and `Sub Ratio` (default **0.55**).
 
-**Implementation.** A fourth bandpass fed from the tone bar path. **Watch the
-body highpass:** `bodyHighpass` is a highpass at exactly `f0`, so a partial at
-`0.7 * f0` routed through it gets attenuated by design. The sub must either
-bypass that filter or be summed after it. This is the kind of interaction that
-silently produces "the feature does nothing" — check it explicitly with the
-mode soloed.
+**The ratio comes from the samples, not the literature.** This section
+previously expected 0.58-0.83 from the papers. Measured in the reference
+library, the sub sits at **0.42-0.60 x f0 from note 28 to note 70 and is absent
+above** -- the bottom of the keyboard agrees with the papers, the middle sits
+lower. 0.55 splits the measured range. Levels came out at −32 to −60 dB
+relative; the default lands the model at about −31 dB at note 52.
 
-**Verify:** solo the sub, confirm a peak at the intended ratio at the intended
-level, then confirm it survives the full chain.
+Two hazards this section warned about, both real:
+
+* **The body highpass.** `bodyHighpass` sits at exactly f0, so a partial at
+  0.55 x f0 is attenuated by roughly 10 dB on its way through the pickup. The
+  feature works anyway, but `Sub Level` is calibrated against what comes *out*,
+  not what goes in. Verified by measurement at the output rather than by
+  reading the signal path: −69.8 dB to −24.4 dB at 91 Hz when the control is
+  opened.
+* **Sub-audio frequencies.** At note 21 the sub would land at 15 Hz, where
+  `designBandpass` clamps to 20 Hz and parks a resonator at a frequency the
+  note does not have. It is skipped below 20 Hz instead, and the control is a
+  bit-identical no-op there.
+
+Not modelled: the measurement says the sub disappears above note 70, and the
+model keeps it across the whole keyboard. Rolling it off with pitch would be
+inventing a curve from an absence, so it is left to `Sub Level`.
 
 ### 1.3 Q that varies across the keyboard — **done, provisionally valued**
 

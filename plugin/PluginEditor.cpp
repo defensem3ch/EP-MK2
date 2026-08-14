@@ -4,10 +4,19 @@
 using namespace epmk2::params;
 
 namespace {
-constexpr int kControlWidth  = 90;
-constexpr int kControlHeight = 78;
-constexpr int kSectionHeader = 26;
-constexpr int kHeaderHeight  = 50;
+constexpr int kControlWidth  = 100;
+constexpr int kControlHeight = 104;
+constexpr int kSectionHeader = 30;
+constexpr int kHeaderHeight  = 56;
+
+// Type sizes, in one place.  Everything is bold: at panel scale a regular
+// weight on a dark background is hard to read at a glance while playing.
+constexpr float kLabelFont   = 15.0f;
+constexpr float kSectionFont = 17.0f;
+constexpr float kTitleFont   = 30.0f;
+constexpr float kValueFont   = 16.0f;
+// Room for two lines of label.
+constexpr int   kLabelHeight = 34;
 constexpr int kPad           = 8;
 constexpr int kSectionColumns = 3;
 }
@@ -22,7 +31,7 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
             juce::AudioProcessorValueTreeState::ButtonAttachment>(tree, spec.id, button);
     } else {
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 78, 19);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 88, 24);
         // No suffix or decimal count here: the parameter's own
         // stringFromValue supplies both, and setting them again doubles the
         // unit ("0.0 dB dB").
@@ -42,18 +51,19 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
 
 void ParamControl::paint(juce::Graphics& g)
 {
-    g.setColour(juce::Colour(0xffcfcfcf));
-    g.setFont(juce::FontOptions(13.0f));
-    g.drawFittedText(label, getLocalBounds().removeFromTop(16),
-                     juce::Justification::centredTop, 1);
+    g.setColour(juce::Colour(0xffe4e4e4));
+    g.setFont(juce::FontOptions(kLabelFont, juce::Font::bold));
+    // Two lines, so a long name wraps instead of running into its neighbour.
+    g.drawFittedText(label, getLocalBounds().removeFromTop(kLabelHeight).reduced(2, 0),
+                     juce::Justification::centredTop, 2);
 }
 
 void ParamControl::resized()
 {
     auto r = getLocalBounds();
-    r.removeFromTop(16);
+    r.removeFromTop(kLabelHeight);
     if (isToggle)
-        button.setBounds(r.withSizeKeepingCentre(30, 30));
+        button.setBounds(r.withSizeKeepingCentre(36, 36));
     else
         slider.setBounds(r.reduced(2, 0));
 }
@@ -101,8 +111,8 @@ void ParamSection::paint(juce::Graphics& g)
     g.fillRoundedRectangle(header, 4.0f);
     g.fillRect(header.withTrimmedTop(header.getHeight() * 0.5f));
 
-    g.setColour(juce::Colour(0xff303030));
-    g.setFont(juce::FontOptions(14.0f, juce::Font::bold));
+    g.setColour(juce::Colour(0xff262626));
+    g.setFont(juce::FontOptions(kSectionFont, juce::Font::bold));
     g.drawText(title.toUpperCase(), header.reduced(8.0f, 0.0f),
                juce::Justification::centredLeft);
 }
@@ -122,9 +132,20 @@ void ParamSection::resized()
 }
 
 //==============================================================================
+juce::Font PanelLookAndFeel::getLabelFont(juce::Label&)
+{
+    return juce::Font(juce::FontOptions(kValueFont, juce::Font::bold));
+}
+
+PanelContent::~PanelContent()
+{
+    setLookAndFeel(nullptr);
+}
+
 PanelContent::PanelContent(EpMk2Processor& p, juce::AudioProcessorValueTreeState& tree)
     : proc(p)
 {
+    setLookAndFeel(&lookAndFeel);
     for (const auto& name : sectionOrder())
         addAndMakeVisible(sections.add(new ParamSection(tree, name)));
 
@@ -148,11 +169,11 @@ void PanelContent::paint(juce::Graphics& g)
     g.fillRect(header);
 
     g.setColour(juce::Colours::white);
-    g.setFont(juce::FontOptions(26.0f));
+    g.setFont(juce::FontOptions(kTitleFont, juce::Font::bold));
     g.drawText("EP-MK2", header.reduced(16, 0), juce::Justification::centredLeft);
 
-    g.setColour(juce::Colour(0xff9a9a9a));
-    g.setFont(juce::FontOptions(14.0f));
+    g.setColour(juce::Colour(0xffb4b4b4));
+    g.setFont(juce::FontOptions(kLabelFont, juce::Font::bold));
     g.drawText(juce::String(activeVoices) + (activeVoices == 1 ? " voice" : " voices"),
                header.reduced(16, 0), juce::Justification::centredRight);
 }

@@ -59,10 +59,19 @@ private:
 // recomputing every font and bound on resize means text, knobs and value boxes
 // all scale together, and JUCE still renders them as vectors at the final
 // resolution rather than magnifying a bitmap.
+// Bigger, bolder type than JUCE's defaults, applied to the whole panel so the
+// value boxes inside sliders pick it up too -- those draw through a Label the
+// slider owns, so setting a font on the slider does not reach them.
+struct PanelLookAndFeel : juce::LookAndFeel_V4
+{
+    juce::Font getLabelFont(juce::Label&) override;
+};
+
 class PanelContent : public juce::Component
 {
 public:
     PanelContent(EpMk2Processor&, juce::AudioProcessorValueTreeState&);
+    ~PanelContent() override;
 
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -81,6 +90,9 @@ private:
 
     struct Placement { int column, y, height; };
 
+    // Declared first so it outlives every component that draws through it.
+    PanelLookAndFeel lookAndFeel;
+
     EpMk2Processor& proc;
     juce::OwnedArray<ParamSection> sections;
     std::vector<Placement> placements;
@@ -94,7 +106,7 @@ class EpMk2Editor : public juce::AudioProcessorEditor,
                     private juce::Timer
 {
 public:
-    static constexpr int kDesignWidth  = 900;
+    static constexpr int kDesignWidth  = 1020;
     // Height comes from the panel's contents; see PanelContent::designHeight.
     int designHeight = 0;
 

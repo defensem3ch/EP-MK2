@@ -64,6 +64,14 @@ struct VoiceParams {
     // both -- see docs/ROADMAP.md Part 3.
     float toneQTracking = 0.217f;
     float toneReleaseQ = 30.0f;      // note-off
+
+    // A partial *below* the fundamental, produced by the tone bar.  Measured
+    // in the reference library at 0.42-0.60 x f0 from note 28 to 70 and absent
+    // above -- see docs/measurements/.  The literature (ROADMAP 1.2) expected
+    // 0.58-0.83; the bottom of the keyboard agrees and the middle sits lower,
+    // so 0.55 is taken from the measurement rather than the paper.
+    float subRatio = 0.55f;
+    float subLevelLin = 0.0316f;     // -30 dB
     float toneLevelLin = 1.0f;
     float hammerLevelLin = 1.0e-5f;  // -100 dB
     float noteOffLevelLin = 0.0128f; // -37.9 dB
@@ -119,6 +127,7 @@ public:
     void clearFilterState() noexcept
     {
         toneBar.reset();
+        subBar.reset();
         tine1.reset();
         tine2.reset();
         tine3.reset();
@@ -282,7 +291,16 @@ public:
         }
 
         // --- tone bar ------------------------------------------------------
-        const float toneRaw = toneBar.process(strike + release) * 0.707946f * kResonatorTrim;
+        const float excite = strike + release;
+        const float toneRaw = toneBar.process(excite) * 0.707946f * kResonatorTrim;
+        // Routed exactly like the tone bar -- into the pickup and into the
+        // direct sum -- because it is the same piece of metal.  Note the
+        // pickup's body highpass sits at f0, so a partial below f0 is
+        // attenuated on the way through by around 10 dB; subLevel is set
+        // against what comes out, not what goes in.
+        const float subRaw = subActive
+                           ? subBar.process(excite) * 0.707946f * kResonatorTrim * p.subLevelLin
+                           : 0.0f;
 
         // --- tine ----------------------------------------------------------
         // Modes above Nyquist are skipped rather than run: see configure().
@@ -294,7 +312,8 @@ public:
         tineRaw *= kResonatorTrim;
 
         // --- pickup --------------------------------------------------------
-        const float pickupIn = (strike * p.pickupAttackLin + toneRaw) * p.pickupGainLin
+        const float pickupIn = (strike * p.pickupAttackLin + toneRaw + subRaw)
+                                   * p.pickupGainLin
                              + tineRaw * p.tineSendLin;
 
         // The tine's excursion is bounded -- it cannot pass through the pickup
@@ -341,7 +360,7 @@ public:
         // --- sum and output ------------------------------------------------
         const float mix = strike * p.hammerLevelLin
                         + pickupOut
-                        + toneRaw * p.toneLevelLin
+                        + (toneRaw + subRaw) * p.toneLevelLin
                         + tineRaw * p.tineLevelLin;
 
         const float out = keytrack2.process(keytrack1.process(mix * gate));
@@ -380,6 +399,18 @@ public:
 
         toneBar.setCoeffs(designBandpass(frequency,
                                          releasing ? p.toneReleaseQ : toneQ, sr));
+
+        // The sub-fundamental is a tone bar mode, so it takes the tone bar's Q
+        // and its release.  Below 20 Hz there is nothing to hear and
+        // designBandpass would clamp it to 20 Hz anyway, parking a resonator
+        // at a frequency the note does not have -- so cull it instead.
+        const double subHz = (double)frequency * (double)p.subRatio;
+        subActive = subHz >= 20.0 && subHz < kNyquistFraction * sr;
+        if (subActive)
+            subBar.setCoeffs(designBandpass((float)subHz,
+                                            releasing ? p.toneReleaseQ : toneQ, sr));
+        else
+            subBar.reset();
 
         // A mode whose frequency is past Nyquist does not exist on the real
         // instrument at that pitch, and must be skipped rather than clamped.
@@ -476,8 +507,9 @@ private:
     bool   fluxPrimed = false;
     float  inducedGain = 1.0f;
 
-    Biquad toneBar, tine1, tine2, tine3, tineHighpass, pickupLowpass, bodyHighpass;
+    Biquad toneBar, subBar, tine1, tine2, tine3, tineHighpass, pickupLowpass, bodyHighpass;
     bool mode1Active = true, mode2Active = true, mode3Active = false;
+    bool subActive = true;
     OnePole keytrack1, keytrack2;
 
     float strikeRamp = 0.0f, strikeInc = 0.0f;
