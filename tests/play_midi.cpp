@@ -119,12 +119,28 @@ int main(int argc, char** argv)
         return false;
     };
 
+    // A fixed slope threshold does not survive a change of timbre.  The
+    // geometric pickup produces a genuinely spiky waveform -- flux goes as
+    // 1/r^3 and peaks sharply as the tine swings close -- so a single clean
+    // note trips a "d1 > 0.02" rule 8-25 times with nothing wrong.  What marks
+    // a real step is a jump far outside the slopes the signal has been making
+    // either side of it, so compare against a running mean of |derivative|.
     const float* d = rendered.getReadPointer(0);
+    const int window = int(0.005 * sr);
     int clicks = 0, unexplained = 0;
     double worst = 0.0, worstAt = 0.0;
+    double slopeSum = 0.0;
+    for (int n = 1; n < juce::jmin(window, totalSamples); ++n)
+        slopeSum += std::fabs(d[n] - d[n-1]);
+
     for (int n = 2; n < totalSamples; ++n) {
+        if (n + window < totalSamples)
+            slopeSum += std::fabs(d[n + window] - d[n + window - 1])
+                      - std::fabs(d[n] - d[n-1]);
+        const double meanSlope = slopeSum / window;
+
         const double d1 = std::fabs(d[n] - d[n-1]), d2 = std::fabs(d[n-1] - d[n-2]);
-        if (d1 > 0.02 && d1 > 8.0 * d2 + 1e-4) {
+        if (d1 > 0.02 && d1 > 8.0 * d2 + 1e-4 && d1 > 12.0 * meanSlope) {
             ++clicks;
             const double t = n / sr;
             if (!nearOnset(t)) {

@@ -68,16 +68,16 @@ struct VoiceParams {
     float hammerVelContact = 1.5f;
 
     // pickup
-    float pickupGainLin = 5.62f;     // +15 dB
+    float pickupGainLin = 5.6234f;   // +15 dB
     float pickupAttackLin = 0.0282f; // -31 dB
     float pickupLowpassHz = 2000.0f;
-    // NOT the 7 shown on the panel.  Every "snd-" control in the patch goes
-    // through [+ 100] -> [dbtorms] before it reaches a voice, so the panel's
-    // 7 arrives as 10^(7/20) = 2.239.  It matters more here than anywhere
-    // else because this value is an exponent: feeding 7 in raw turns the
-    // pickup into a far harsher waveshaper than the model intends, and the
-    // extra harmonics read as a Wurlitzer bark rather than a Rhodes.
-    float pickupSymmetryLin = 2.23872f;   // panel: 7 dB
+    // Pickup geometry, in units of the tine's vibration amplitude.  These
+    // replace the old "symmetry" exponent: offset is what actually produces
+    // asymmetry, and so it is now the Rhodes-to-Wurlitzer axis.  An offset of
+    // 0 puts the tine on the magnetic axis, where the response is purely even
+    // and the fundamental disappears.
+    float pickupDistance = 0.8f;
+    float pickupOffset = 0.8f;
     float pickupLevelLin = 2.0f;     // +6 dB
     float buzzLevelLin = 1.0f;
     float buzzPhase = 1.0f;          // +1 or -1
@@ -92,6 +92,8 @@ public:
         sampleRate = sr;
         // ~50 ms peak-follower release.
         envelopeDecay = float(std::exp(-1.0 / (0.05 * sr)));
+        // Unity at A4 for the dPhi/dt differentiator.
+        inducedGain = float(sr / (2.0 * M_PI * 440.0));
         reset();
     }
 
@@ -106,6 +108,8 @@ public:
         bodyHighpass.reset();
         keytrack1.reset();
         keytrack2.reset();
+        fluxPrev = 0.0f;
+        fluxPrimed = false;
     }
 
     void reset() noexcept
@@ -381,7 +385,7 @@ private:
     // hard the pickup's tanh is driven.  Applied at the output instead, the
     // level would be right while the pickup sat permanently saturated.
 #ifndef EPMK2_RES_TRIM
-#define EPMK2_RES_TRIM 0.0022f
+#define EPMK2_RES_TRIM 0.0018f
 #endif
     static constexpr float kResonatorTrim = EPMK2_RES_TRIM;
 
@@ -402,6 +406,9 @@ private:
     float  note = 69.0f;
     float  velocityAmp = 1.0f;
     float  strikeAmp = 1.0f;
+    float  fluxPrev = 0.0f;
+    bool   fluxPrimed = false;
+    float  inducedGain = 1.0f;
 
     Biquad toneBar, tine1, tine2, tine3, tineHighpass, pickupLowpass, bodyHighpass;
     bool mode1Active = true, mode2Active = true, mode3Active = false;

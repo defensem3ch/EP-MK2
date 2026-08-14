@@ -55,16 +55,37 @@ void EpMk2Processor::handleMidi(const juce::MidiMessage& m)
         engine.noteOn(m.getNoteNumber(), m.getVelocity(), params);
     else if (m.isNoteOff())
         engine.noteOff(m.getNoteNumber(), params);
-    else if (m.isSustainPedalOn())
-        params.voice.sustainPedal = true;
+    else if (m.isSustainPedalOn()) {
+        ccSustain = true;
+        updatePedal();
+    }
     else if (m.isSustainPedalOff()) {
-        params.voice.sustainPedal = false;
-        engine.sustainPedal(false, params);
+        ccSustain = false;
+        updatePedal();
     }
     else if (m.isAllNotesOff())
         engine.allNotesOff(params);
     else if (m.isAllSoundOff())
         engine.allSoundOff();
+}
+
+// CC64 and the panel toggle are two ways to press one pedal, so the pedal is
+// down if either says so.  This has to be reapplied every block: params::apply
+// writes the panel toggle straight into params.voice.sustainPedal, which used
+// to wipe out a pedal held by CC64 at the very next block boundary -- about
+// 10 ms, long enough for the pedal to look like it worked and short enough for
+// it never to actually hold a note.
+void EpMk2Processor::updatePedal()
+{
+    const bool wanted = paramSustain || ccSustain;
+    params.voice.sustainPedal = wanted;
+    if (wanted == pedalDown)
+        return;
+    pedalDown = wanted;
+    // Releasing the pedal has to let go of every voice whose key is already up.
+    // Nothing did this when the panel toggle was switched off, either.
+    if (!wanted)
+        engine.sustainPedal(false, params);
 }
 
 void EpMk2Processor::processBlock(juce::AudioBuffer<float>& buffer,
@@ -76,6 +97,11 @@ void EpMk2Processor::processBlock(juce::AudioBuffer<float>& buffer,
     // coefficients when something that feeds one has actually moved.
     if (epmk2::params::apply(state, params, lastParamValues))
         engine.configureAll(params);
+
+    // apply() has just written the panel toggle into params.voice.sustainPedal;
+    // fold CC64 back in before anything is rendered.
+    paramSustain = params.voice.sustainPedal;
+    updatePedal();
 
     const int numSamples = buffer.getNumSamples();
     buffer.clear();

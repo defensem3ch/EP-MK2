@@ -56,7 +56,8 @@ bool apply(const juce::AudioProcessorValueTreeState& tree,
         else if (id == "pickup_gain")     p.voice.pickupGainLin = lin;
         else if (id == "pickup_attack")   p.voice.pickupAttackLin = lin;
         else if (id == "pickup_lopass")   p.voice.pickupLowpassHz = v;
-        else if (id == "pickup_symmetry") p.voice.pickupSymmetryLin = lin;
+        else if (id == "pickup_distance") p.voice.pickupDistance = v;
+        else if (id == "pickup_offset")   p.voice.pickupOffset = v;
         else if (id == "pickup_level")    p.voice.pickupLevelLin = lin;
         else if (id == "buzz_level")      p.voice.buzzLevelLin = lin;
         // The panel toggle sends 0/1; the patch maps that to -1/+1 via [* 2]->[- 1].

@@ -69,7 +69,8 @@ int main(int argc, char** argv)
         else if (!strcmp(spec, "buzz_level"))   p.buzzLevelLin   = dB(val);
         else if (!strcmp(spec, "tine_send"))    p.tineSendLin    = dB(val);
         else if (!strcmp(spec, "pickup_gain"))  p.pickupGainLin  = dB(val);
-        else if (!strcmp(spec, "pickup_symmetry")) p.pickupSymmetryLin = dB(val);
+        else if (!strcmp(spec, "pickup_distance")) p.pickupDistance = val;
+        else if (!strcmp(spec, "pickup_offset"))   p.pickupOffset = val;
         else if (!strcmp(spec, "pickup_attack"))   p.pickupAttackLin   = dB(val);
         else { fprintf(stderr, "unknown --set %s\n", spec); return 1; }
         printf("  set %s = %g dB\n", spec, val);

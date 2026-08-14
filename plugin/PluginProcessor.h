@@ -46,10 +46,17 @@ public:
 
 private:
     void handleMidi(const juce::MidiMessage& m);
+    // The pedal can be put down by MIDI CC64 or by the panel toggle, and the
+    // two have to be combined rather than one overwriting the other.
+    void updatePedal();
 
     juce::AudioProcessorValueTreeState state;
     std::vector<float> lastParamValues;
     int currentProgram = 0;
+
+    bool ccSustain = false;      // from MIDI CC64
+    bool paramSustain = false;   // from the panel toggle
+    bool pedalDown = false;      // the two combined, as last applied
 
     epmk2::Engine engine;
     epmk2::EngineParams params;

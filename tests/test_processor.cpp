@@ -79,27 +79,54 @@ int main()
         check(after < held * 0.05f, "note off decays to silence", d);
     }
 
-    // sustain pedal should hold a released note
+    // Sustain pedal.  The old version of this check passed even while CC64 was
+    // being wiped out at every block boundary, because it only asked whether
+    // anything was still audible.  What matters is the *difference* the pedal
+    // makes, measured well after the block in which it was pressed.
     {
-        juce::MidiBuffer midi;
-        midi.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
-        midi.addEvent(juce::MidiMessage::noteOn(1, 48, (juce::uint8)100), 1);
-        renderPeak(proc, midi, blocksPerSecond / 2, block);
+        auto playAndMeasure = [&](bool pedal, bool viaParam) {
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+            if (auto* q = proc.getState().getParameter("sustain"))
+                q->setValueNotifyingHost(pedal && viaParam ? 1.0f : 0.0f);
 
-        juce::MidiBuffer off;
-        off.addEvent(juce::MidiMessage::noteOff(1, 48), 0);
-        const float pedalled = renderPeak(proc, off, blocksPerSecond * 2, block);
+            juce::MidiBuffer midi;
+            if (pedal && !viaParam)
+                midi.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
+            midi.addEvent(juce::MidiMessage::noteOn(1, 48, (juce::uint8)100), 1);
+            renderPeak(proc, midi, blocksPerSecond / 2, block);
 
+            juce::MidiBuffer off;
+            off.addEvent(juce::MidiMessage::noteOff(1, 48), 0);
+            // Let a full second pass and throw it away -- renderPeak reports
+            // the peak across its whole window, so measuring through the decay
+            // just measures the moment the key came up.  What matters is what
+            // is left afterwards.
+            juce::MidiBuffer none;
+            renderPeak(proc, off, blocksPerSecond, block);
+            return renderPeak(proc, none, blocksPerSecond / 4, block);
+        };
+
+        const float dry = playAndMeasure(false, false);
+        const float cc  = playAndMeasure(true,  false);
+        char d[96]; snprintf(d, sizeof d, "  (pedal %.4f vs no pedal %.5f)", cc, dry);
+        check(cc > dry * 10.0f && cc > 0.01f, "CC64 holds a released note", d);
+
+        const float panel = playAndMeasure(true, true);
+        char d2[80]; snprintf(d2, sizeof d2, "  (%.4f)", panel);
+        check(panel > dry * 10.0f && panel > 0.01f, "the panel toggle holds too", d2);
+
+        // ...and letting it go must actually release.
+        if (auto* q = proc.getState().getParameter("sustain"))
+            q->setValueNotifyingHost(0.0f);
         juce::MidiBuffer up;
         up.addEvent(juce::MidiMessage::controllerEvent(1, 64, 0), 0);
         renderPeak(proc, up, blocksPerSecond * 3, block);
         juce::MidiBuffer none;
         const float released = renderPeak(proc, none, blocksPerSecond, block);
-
-        char d[80]; snprintf(d, sizeof d, "  (held %.4f, after pedal up %.5f)",
-                             pedalled, released);
-        check(pedalled > 0.02f && released < pedalled * 0.05f,
-              "CC64 sustains, and releases on pedal up", d);
+        char d3[80]; snprintf(d3, sizeof d3, "  (%.6f)", released);
+        check(released < 0.01f, "releasing the pedal lets the note go", d3);
     }
 
     // polyphony: a chord should be louder than one note
@@ -237,16 +264,16 @@ int main()
         check(wrongDefault == 0, "defaults match the table");
 
         // A state round-trip should preserve a changed value.
-        if (auto* pm = tree.getParameter("pickup_symmetry")) {
-            pm->setValueNotifyingHost(pm->convertTo0to1(18.0f));
+        if (auto* pm = tree.getParameter("pickup_offset")) {
+            pm->setValueNotifyingHost(pm->convertTo0to1(1.10f));
             juce::MemoryBlock blob;
             proc.getStateInformation(blob);
-            pm->setValueNotifyingHost(pm->convertTo0to1(3.0f));
+            pm->setValueNotifyingHost(pm->convertTo0to1(0.20f));
             proc.setStateInformation(blob.getData(), (int)blob.getSize());
-            const float back = tree.getRawParameterValue("pickup_symmetry")->load();
+            const float back = tree.getRawParameterValue("pickup_offset")->load();
             char e[64]; snprintf(e, sizeof e, "  (%.2f)", back);
-            check(std::fabs(back - 18.0f) < 0.1f, "state round-trips a changed value", e);
-            pm->setValueNotifyingHost(pm->convertTo0to1(7.0f));
+            check(std::fabs(back - 1.10f) < 0.01f, "state round-trips a changed value", e);
+            pm->setValueNotifyingHost(pm->convertTo0to1(0.45f));
         }
 
         // Moving a parameter must be audible.
@@ -278,11 +305,11 @@ int main()
         char m[80]; snprintf(m, sizeof m, "  (energy %.1f vs %.4f)", loud, quiet);
         check(loud > quiet * 50.0f, "master attenuates", m);
 
-        const float dull   = renderNote("pickup_symmetry", 0.0f);
-        const float barky  = renderNote("pickup_symmetry", 20.0f);
+        const float dull   = renderNote("pickup_offset", 0.05f);
+        const float barky  = renderNote("pickup_offset", 1.30f);
         char n2[80]; snprintf(n2, sizeof n2, "  (energy %.2f vs %.2f)", barky, dull);
-        check(std::fabs(barky - dull) > dull * 0.05f, "pickup symmetry changes the tone", n2);
-        renderNote("pickup_symmetry", 7.0f);
+        check(std::fabs(barky - dull) > dull * 0.05f, "pickup offset changes the tone", n2);
+        renderNote("pickup_offset", 0.45f);
     }
 
     // ---- tine modes and the Nyquist cull ---------------------------------

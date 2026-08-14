@@ -57,7 +57,11 @@ inline const std::vector<Spec>& table()
         { "pickup_gain",     "Pickup Gain",     "Pickup", Unit::Decibels,    0.0f,    24.0f,   15.0f, false },
         { "pickup_attack",   "Pickup Attack",   "Pickup", Unit::Decibels, -100.0f,    30.0f,  -31.0f, false },
         { "pickup_lopass",   "Pickup Low-Pass", "Pickup", Unit::Hertz,     20.0f, 20000.0f, 2000.0f, true  },
-        { "pickup_symmetry", "Pickup Symmetry", "Pickup", Unit::Decibels,    0.0f,    24.0f,    7.0f, true  },
+        // Geometry, replacing the old symmetry exponent.  Offset is what
+        // creates asymmetry, so it is now the Rhodes-to-Wurlitzer axis: at 0
+        // the tine sits on the magnetic axis and the response is purely even.
+        { "pickup_distance", "Pickup Distance", "Pickup", Unit::Ratio,      0.1f,     3.0f,    0.8f, true  },
+        { "pickup_offset",   "Pickup Offset",   "Pickup", Unit::Ratio,      0.0f,     1.5f,    0.8f, true  },
         { "pickup_level",    "Pickup Level",    "Pickup", Unit::Decibels, -100.0f,     6.0f,    6.0f, false },
         { "buzz_level",      "Buzz Level",      "Pickup", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
         { "buzz_phase",      "Buzz Phase",      "Pickup", Unit::Toggle,     0.0f,     1.0f,    1.0f, false },

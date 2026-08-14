@@ -148,30 +148,88 @@ something musical and presets stay meaningful.
 **Verify:** measure T60 per note from rendered notes and compare against the
 table; and against the sample benchmark (§3), which gives decay times directly.
 
-### 1.4 A pickup with geometry instead of two dB knobs
+### 1.4 A pickup with geometry instead of two dB knobs — **done**
 
-**Now:** `pickupGain` and `pickupSymmetry` — the latter an exponent in a
-tabulated curve `y = (2^(s·x) − 1) / 2^s` (see `PickupShaper`).
+`pickup_symmetry` is gone. In its place are **`pickup_distance`** (the tine's
+rest gap from the pole) and **`pickup_offset`** (how far it sits off the
+magnetic axis), both in units of the tine's vibration amplitude. Flux follows a
+dipole falloff, `Phi ~ 1/(d^2 + (o+x)^2)^1.5`, tabulated and shared across
+voices exactly as the old curve was.
 
-**Measured:** the papers model the pickup from tine–pickup **distance** and
-vertical **offset**. The sidebands around each inharmonic mode fall out of that
-geometry; they cannot be produced by a symmetric gain control.
+Two things fall out of doing it properly, and both were the point:
 
-**Implementation.** This is a smaller change than it sounds, because
-`PickupShaper` is already a tabulated static curve shared across voices — swap
-the *table generator*, keep the interpolation and the sharing. A magnetic
-pickup's flux falls off with distance, so something of the form
-`B(x) = 1 / (1 + ((x − offset) / distance)²)` , with the output proportional to
-`dB/dt`, gives both the asymmetry and the distance-dependent harmonic content.
-The differentiator is new and belongs in `Voice`, not the shared table.
+**Offset is the asymmetry, and so the new Rhodes↔Wurlitzer axis.** Measured at
+A2, harmonics relative to the fundamental:
 
-Expose `distance` and `offset`; keep `gain`. Retire `symmetry`, or keep it as a
-preset-compatibility alias — but note that `pickup_symmetry` is currently the
-strongest Rhodes↔Wurlitzer axis we have (`MODEL-NOTES.md` §1), so it must not
-simply disappear.
+| offset | 2nd | 3rd | 4th |
+| --- | --- | --- | --- |
+| 0.00 | **+8.9** | −27.9 | +5.4 |
+| 0.25 | +4.9 | +0.6 | −0.7 |
+| 0.50 | −5.6 | −0.2 | −21.0 |
+| **0.80** (default) | −9.5 | −9.3 | −10.8 |
+| 1.00 | −5.1 | −23.4 | −15.1 |
 
-**Verify:** confirm sidebands appear around the tine modes and move with
-`offset`; A/B against the benchmark samples' spectra.
+At offset 0 the tine sits on the magnetic axis, the response is purely even,
+and the fundamental collapses under a 2nd harmonic 9 dB above it — textbook,
+and a good check that the geometry is right rather than merely plausible. Note
+this reverses the preset mapping that was written before: a Wurlitzer's bark is
+*even* harmonics, so it wants a **low** offset, not a high one. 0.80 is chosen
+as the default because 2nd, 3rd and 4th all land within about a dB of each
+other, which is a neutral place to tune from.
+
+**The coil senses dPhi/dt, which supplies the missing treble tilt.** A
+differentiator normalised to unity at A4 now sits after the flux table, and it
+is what 1.6 left open. Output across the keyboard, relative:
+
+| | note 21 | 45 | 69 | 93 |
+| --- | --- | --- | --- | --- |
+| after 1.6 | −18.8 | −18.9 | −20.6 | −30.4 |
+| **now** | −15.4 | −15.6 | −18.0 | −38.4 |
+
+Flat within 0.2 dB from note 21 to 45 and 2.6 dB out to note 69. The top of the
+range is still down, and pushing the pickup harder flattens it further — but
+that trade is real and is discussed below.
+
+**Rebalanced:** `pickup_gain` stays at +15 dB, and `kResonatorTrim` came down
+to 0.0018 for headroom. Preset `pickup_gain` values were re-levelled twice; all
+six now sit within 3.7 dB of each other.
+
+#### What this cost, and what is still provisional
+
+The tilt correction lives in the pickup path, so **how flat the keyboard is
+depends on how much of the output comes through the pickup** rather than
+through the direct tone-bar and tine sums. Those direct sums are not physical —
+a real Rhodes is heard only through its pickup — and cutting them (tone/tine
+level to −24 dB, pickup gain to +20) does flatten the keyboard to within 0.6 dB
+from note 21 to 69. But it also collapses the tine modes, because `tine_send`
+is −77 dB and so the tine barely reaches the pickup at all: the Pd model has
+the pickup mostly sensing the *tone bar*, when physically it faces the tine.
+Raising `tine_send` does not recover them cleanly either — the response goes
+non-monotonic as the geometry saturates.
+
+**So the routing is the next structural question, not a tuning one**, and it is
+left as it stands rather than half-changed.
+
+Preset voicing is provisional: levelled and measurably distinct (27–54% apart),
+but tuned against numbers, not ears.
+
+#### A detector that had to be fixed too
+
+The geometric pickup produces a genuinely spiky waveform, and a fixed slope
+threshold does not survive that. A **single isolated note, with nothing
+happening after t=0**, tripped the old `d1 > 0.02` rule 8–25 times. Those are
+not clicks: a 0.027 jump at 48 kHz is an ordinary slew rate, where MK1's real
+crackle was 0.277. `play_midi` now compares each jump against a running mean of
+|derivative| over 5 ms, so it flags steps rather than sharpness. Result: 31
+slope events, all inside note attacks, **0 unexplained**.
+
+Two false leads on the way, recorded so they are not retried: the corners are
+*not* from `tanhApprox` joining its clamp with mismatched curvature (switching
+to `std::tanh` changed the count not at all, though it is kept, being both
+smooth and affordable at 0.8% CPU), and they are not from the flux
+differentiator starting from a stale `fluxPrev` — though that was a real bug
+and is fixed, since flux at rest is not zero and the step would have been
+multiplied by ~17.
 
 ### 1.5 Oversampling, targeted
 

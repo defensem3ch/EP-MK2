@@ -132,6 +132,27 @@ int main()
                dB(goertzel(x, fn, sr)), dB(goertzel(x, fn * p.voice.tineRatio1, sr)));
     }
 
+    // --- pickup geometry ---------------------------------------------------
+    // Offset is what makes the response asymmetric, so it should govern the
+    // even harmonics: at 0 the tine sits on the magnetic axis, the response is
+    // purely even, and the fundamental should collapse.
+    printf("\n  pickup geometry at A2 (harmonics relative to f0):\n");
+    printf("    %-8s %-8s %8s %8s %8s %8s\n",
+           "dist", "offset", "f0 dB", "2f0", "3f0", "4f0");
+    for (double dist : { 0.8 }) {
+        for (double off : { 0.25, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 }) {
+            auto q = p;
+            q.voice.pickupDistance = (float)dist;
+            q.voice.pickupOffset = (float)off;
+            const auto x = render(q, note, sr, n);
+            const double h1 = goertzel(x, f0, sr);
+            printf("    %-8.2f %-8.2f %8.1f %8.1f %8.1f %8.1f\n", dist, off,
+                   dB(h1), dB(goertzel(x, f0*2, sr)) - dB(h1),
+                   dB(goertzel(x, f0*3, sr)) - dB(h1),
+                   dB(goertzel(x, f0*4, sr)) - dB(h1));
+        }
+    }
+
     // --- rebalancing after the excitation change --------------------------
     // The strike now carries ~11x the impulse it did, so every gain calibrated
     // against the old weak pulse is too hot.  Sweep the two that matter and

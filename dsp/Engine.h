@@ -118,7 +118,7 @@ public:
 
     inline float process(const EngineParams& p) noexcept
     {
-        shaper.setSymmetry(p.voice.pickupSymmetryLin);
+        shaper.setGeometry(p.voice.pickupDistance, p.voice.pickupOffset);
         setVoiceCount(p.polyphony);
 
         float sum = 0.0f;

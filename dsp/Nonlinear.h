@@ -44,27 +44,63 @@ inline float powPd(float base, float exponent) noexcept
 // the player moves a control.  So the whole curve is tabulated over that range
 // whenever the parameter changes, and the audio path is a table lookup with
 // linear interpolation.
+// The pickup, modelled from its geometry rather than from a symmetry knob.
+//
+// A Rhodes pickup is a magnet and coil facing the tine.  The flux linking the
+// coil depends on how far away the tine is, and the coil senses dPhi/dt, not
+// Phi.  Two things follow, and the model needs both:
+//
+//   * The nonlinearity is the shape of Phi(x), which is set by where the tine
+//     sits relative to the pole -- its distance, and its offset off the
+//     magnetic axis.  A tine centred on the axis (offset 0) gives a purely
+//     even response: no fundamental, only the octave.  Real pickups are
+//     deliberately offset, and how far sets the asymmetry that used to be dialled
+//     in by hand as "symmetry".
+//   * Sensing dPhi/dt is a differentiator, so the pickup has an inherent
+//     +6 dB/octave tilt.  That is missing from a static waveshaper, and its
+//     absence is why output fell ~20 dB from the bottom of the keyboard to the
+//     top (roadmap 1.6).  The differentiation happens in Voice; this class
+//     supplies Phi(x).
+//
+// Tabulated and shared across voices, as before: the geometry is global, and
+// giving every voice its own copy costs more in cache misses than it saves.
 class PickupShaper {
 public:
-    // 1024 entries is 4 KB: small enough to stay in L1.  One instance is
-    // shared by every voice, since the symmetry control is global -- giving
-    // each voice its own copy costs more in cache misses than the exp2 did.
     static constexpr int kSize = 1024;
 
-    void setSymmetry(float s) noexcept
+    // `distance` is the tine's rest gap from the pole and `offset` how far it
+    // sits off the magnetic axis, both in units of the tine's vibration
+    // amplitude -- so the interesting range for each is around 1.
+    void setGeometry(float distance, float offset) noexcept
     {
-        if (s == symmetry && built)
+        if (built && distance == lastDistance && offset == lastOffset)
             return;
-        symmetry = s;
+        lastDistance = distance;
+        lastOffset = offset;
         built = true;
 
-        const float den = std::exp2(s);
-        const float invDen = den > 0.0f ? 1.0f / den : 0.0f;
+        const float d = distance < 0.05f ? 0.05f : distance;
+        const float d2 = d * d;
 
+        float lo = 1.0e30f, hi = -1.0e30f;
         for (int i = 0; i <= kSize; ++i) {
             const float x = -1.0f + 2.0f * float(i) / float(kSize);
-            curve[i] = (std::exp2(s * x) - 1.0f) * invDen;
+            const float u = offset + x;
+            // Dipole falloff: flux ~ 1 / r^3.
+            const float v = std::pow(d2 + u * u, -1.5f);
+            curve[i] = v;
+            if (v < lo) lo = v;
+            if (v > hi) hi = v;
         }
+
+        // Normalise the swing to unity so moving the pickup changes the shape
+        // of the response -- which harmonics appear -- without also acting as a
+        // large and very nonlinear volume control.  Flux falls off as 1/r^3, so
+        // without this, halving the distance would raise the level by 18 dB.
+        const float span = hi - lo;
+        const float inv = span > 1.0e-20f ? 1.0f / span : 0.0f;
+        for (int i = 0; i <= kSize; ++i)
+            curve[i] = (curve[i] - lo) * inv;
     }
 
     inline float process(float x) const noexcept
@@ -81,7 +117,7 @@ public:
     }
 
 private:
-    float symmetry = -1.0e9f;
+    float lastDistance = -1.0e9f, lastOffset = -1.0e9f;
     bool  built = false;
     float curve[kSize + 1] = {};
 };

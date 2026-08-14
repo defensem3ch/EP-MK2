@@ -48,26 +48,29 @@ inline const std::vector<Preset>& table()
         // a pickup symmetry of 7 dB (= 2.24 as an exponent).
         { "Rhodes MkI", {} },
 
-        // Same instrument, mic'd brighter: more tine into the pickup, a
-        // higher pickup corner, and a touch more asymmetry for bite.
+        // Same instrument, mic'd brighter: more tine into the pickup, a higher
+        // pickup corner, and the tine moved nearer the magnetic axis, which
+        // brings up the harmonics either side of the fundamental.
         { "Rhodes Bright", {
-            { "tine_send",       -70.0f },
-            { "pickup_lopass",  3000.0f },
-            { "pickup_gain",      17.0f },
-            { "pickup_symmetry",   9.0f },
+            { "tine_send",       -64.0f },
+            { "pickup_lopass",  5000.0f },
+            { "pickup_gain",      11.0f },
+            { "pickup_offset",    0.55f },
         }},
 
         // A reed, not a rod, and no tone bar.  A flat cantilever's ideal mode
-        // ratios are 6.27 and 17.55; the electrostatic pickup distorts far
-        // harder than a magnetic one, which is the bark; and it rings shorter.
+        // ratios are 6.27 and 17.55, and it rings shorter.  The bark is even
+        // harmonics, so the tine sits close to the magnetic axis where the
+        // response is most asymmetric -- a *low* offset, not a high one.
         { "Wurlitzer", {
             { "tine_ratio1",       6.27f },
             { "tine_ratio2",      17.55f },
             { "tine_decay",      180.0f },
             { "tine_send",       -68.0f },
             { "tone_decay",      900.0f },
-            { "pickup_gain",      17.0f },
-            { "pickup_symmetry",  16.0f },
+            { "pickup_gain",      11.0f },
+            { "pickup_offset",    0.40f },
+            { "pickup_distance",  0.55f },
             { "pickup_lopass",  2600.0f },
         }},
 
@@ -80,22 +83,24 @@ inline const std::vector<Preset>& table()
             { "tine_send",       -55.0f },
             { "tone_decay",      600.0f },
             { "tone_release",     20.0f },
-            { "pickup_gain",      20.0f },
-            { "pickup_symmetry",  11.0f },
+            { "pickup_gain",      14.0f },
+            { "pickup_offset",    0.65f },
             { "pickup_lopass",  4000.0f },
         }},
 
         // Bars are undercut so the first overtone is exactly 4x (a free bar's
         // natural ratio would be 6.27), with the second near 10.8.  Long
-        // sustain, and almost no pickup nonlinearity -- there is no pickup.
+        // sustain, and the pickup pulled far back and well off axis, which is
+        // as close to linear as the geometry gets -- there is no pickup.
         { "Vibraphone", {
             { "tine_ratio1",       4.0f },
             { "tine_ratio2",      10.8f },
             { "tine_decay",     1200.0f },
             { "tine_level",      -12.0f },
             { "tone_decay",     2000.0f },
-            { "pickup_gain",       6.0f },
-            { "pickup_symmetry",   0.0f },
+            { "pickup_gain",      18.0f },
+            { "pickup_offset",    1.00f },
+            { "pickup_distance",  1.60f },
             { "pickup_lopass",  1200.0f },
             { "buzz_level",     -100.0f },
         }},
@@ -109,8 +114,8 @@ inline const std::vector<Preset>& table()
             { "tine_send",       -62.0f },
             { "tone_decay",      400.0f },
             { "tone_level",       -3.0f },
-            { "pickup_gain",      18.0f },
-            { "pickup_symmetry",   2.0f },
+            { "pickup_gain",      16.0f },
+            { "pickup_offset",    0.70f },
             { "pickup_lopass",  3000.0f },
         }},
     };
