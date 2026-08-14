@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <functional>
 #include <set>
+#include <vector>
+#include <algorithm>
 
 #include "../plugin/PluginProcessor.h"
 #include "../plugin/PluginEditor.h"
@@ -211,6 +213,120 @@ int main()
         char n2[80]; snprintf(n2, sizeof n2, "  (energy %.2f vs %.2f)", barky, dull);
         check(std::fabs(barky - dull) > dull * 0.05f, "pickup symmetry changes the tone", n2);
         renderNote("pickup_symmetry", 7.0f);
+    }
+
+    // ---- factory presets -------------------------------------------------
+    // A preset that loads but sounds like the one before it is not a preset,
+    // so each is measured for level and brightness rather than merely checked
+    // for not crashing.
+    {
+        const int numPresets = proc.getNumPrograms();
+        char np[64]; snprintf(np, sizeof np, "  (%d presets)", numPresets);
+        check(numPresets >= 4, "ships factory presets", np);
+
+        // Render a whole note per preset and keep it, so presets can be
+        // compared against Rhodes waveform-to-waveform.  Zero-crossing rate
+        // is no use here: it comes out at 2*f0/SR for every preset because
+        // the fundamental dominates, and says nothing about timbre.
+        auto render = [&](int program, std::vector<float>& out) {
+            proc.setCurrentProgram(program);
+            out.clear();
+
+            juce::MidiBuffer m;
+            m.addEvent(juce::MidiMessage::noteOn(1, 57, (juce::uint8)100), 0);
+            juce::AudioBuffer<float> b(2, block);
+            for (int i = 0; i < blocksPerSecond; ++i) {
+                b.clear();
+                proc.processBlock(b, m);
+                m.clear();
+                for (int n = 0; n < block; ++n)
+                    out.push_back(b.getSample(0, n));
+            }
+
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+        };
+
+        auto rmsOf = [](const std::vector<float>& v) {
+            double e = 0.0;
+            for (float s : v) e += double(s) * double(s);
+            return float(std::sqrt(e / std::max<size_t>(1, v.size())));
+        };
+        // Energy of the first difference over total energy: proportional to
+        // mean squared frequency, so it rises with brightness.  Unlike ZCR it
+        // responds to harmonics above the fundamental.
+        auto brightnessOf = [](const std::vector<float>& v) {
+            double hi = 0.0, all = 0.0;
+            for (size_t n = 1; n < v.size(); ++n) {
+                const double d = double(v[n]) - double(v[n-1]);
+                hi  += d * d;
+                all += double(v[n]) * double(v[n]);
+            }
+            return all > 0.0 ? float(std::sqrt(hi / all)) : 0.0f;
+        };
+
+        bool allNamed = true, allSound = true, allDistinct = true;
+        std::vector<float> rhodes, current;
+
+        for (int i = 0; i < numPresets; ++i) {
+            const juce::String name = proc.getProgramName(i);
+            if (name.isEmpty()) allNamed = false;
+
+            render(i, current);
+            const float rms = rmsOf(current);
+            const float bright = brightnessOf(current);
+            if (!(rms > 1.0e-4f)) allSound = false;
+
+            float difference = 0.0f;
+            if (i == 0) {
+                rhodes = current;
+            } else {
+                double d = 0.0;
+                const size_t n = std::min(rhodes.size(), current.size());
+                for (size_t k = 0; k < n; ++k) {
+                    const double delta = double(current[k]) - double(rhodes[k]);
+                    d += delta * delta;
+                }
+                difference = float(std::sqrt(d / std::max<size_t>(1, n)))
+                           / std::max(1.0e-9f, rmsOf(rhodes));
+                if (difference < 0.05f) allDistinct = false;
+            }
+
+            printf("      %-16s rms %.4f  brightness %.4f  differs from Rhodes %5.1f%%\n",
+                   name.toRawUTF8(), rms, bright, difference * 100.0f);
+        }
+
+        check(allNamed, "every preset is named");
+        check(allSound, "every preset produces sound");
+        check(allDistinct, "every preset differs from Rhodes");
+
+        // Presets are overrides on the defaults, so switching away and back
+        // must land where it started rather than accumulating.
+        proc.setCurrentProgram(0);
+        const float rhodesRatio1 = proc.getState().getParameter("tine_ratio1")->getValue();
+        proc.setCurrentProgram(2);
+        proc.setCurrentProgram(0);
+        const float backAgain = proc.getState().getParameter("tine_ratio1")->getValue();
+        check(std::fabs(backAgain - rhodesRatio1) < 1.0e-6f,
+              "switching presets is not cumulative");
+
+        // Tuning, level and polyphony belong to the player, not the preset.
+        auto* master = proc.getState().getParameter("master");
+        auto* poly   = proc.getState().getParameter("polyphony");
+        master->setValueNotifyingHost(master->convertTo0to1(-12.0f));
+        poly->setValueNotifyingHost(poly->convertTo0to1(16.0f));
+        proc.setCurrentProgram(3);
+        const float keptMaster = master->convertFrom0to1(master->getValue());
+        const float keptPoly   = poly->convertFrom0to1(poly->getValue());
+        char kept[80];
+        snprintf(kept, sizeof kept, "  (master %.1f dB, poly %.0f)", keptMaster, keptPoly);
+        check(std::fabs(keptMaster + 12.0f) < 0.5f && std::fabs(keptPoly - 16.0f) < 0.5f,
+              "presets leave level and polyphony alone", kept);
+
+        master->setValueNotifyingHost(master->convertTo0to1(0.0f));
+        poly->setValueNotifyingHost(poly->convertTo0to1(32.0f));
+        proc.setCurrentProgram(0);
     }
 
     // The editor exists so hosts do not fall back to a generic view of JUCE's

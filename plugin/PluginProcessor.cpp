@@ -1,5 +1,27 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Presets.h"
+
+int EpMk2Processor::getNumPrograms()
+{
+    return (int) epmk2::presets::table().size();
+}
+
+const juce::String EpMk2Processor::getProgramName(int index)
+{
+    const auto& t = epmk2::presets::table();
+    return (index >= 0 && index < (int) t.size()) ? juce::String(t[(size_t) index].name)
+                                                  : juce::String();
+}
+
+void EpMk2Processor::setCurrentProgram(int index)
+{
+    if (index < 0 || index >= getNumPrograms())
+        return;
+
+    currentProgram = index;
+    epmk2::presets::apply(state, index);
+}
 
 EpMk2Processor::EpMk2Processor()
     : juce::AudioProcessor(BusesProperties()

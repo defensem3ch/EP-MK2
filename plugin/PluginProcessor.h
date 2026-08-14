@@ -29,10 +29,12 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 8.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return "Default"; }
+    // Factory presets (see Presets.h).  Hosts show these in their own preset
+    // menu, so they work in VST3 and LV2 without preset files on disk.
+    int getNumPrograms() override;
+    int getCurrentProgram() override { return currentProgram; }
+    void setCurrentProgram(int) override;
+    const juce::String getProgramName(int) override;
     void changeProgramName(int, const juce::String&) override {}
 
     void getStateInformation(juce::MemoryBlock&) override;
@@ -47,6 +49,7 @@ private:
 
     juce::AudioProcessorValueTreeState state;
     std::vector<float> lastParamValues;
+    int currentProgram = 0;
 
     epmk2::Engine engine;
     epmk2::EngineParams params;

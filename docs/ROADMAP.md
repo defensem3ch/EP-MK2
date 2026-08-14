@@ -233,5 +233,7 @@ checked against it.
 * **Fitting the model to samples automatically** — parameter optimisation only
   makes sense once the structure is right. Fitting a model that lacks the 39.7
   mode just distorts the parameters it does have to compensate.
-* **Rhodes/Wurly switch and presets** — designed in `MODEL-NOTES.md`. Worth
+* **Preset system beyond the six factory presets** — MK2 inherits Rhodes
+  MkI/Bright, Wurlitzer, Clav, Vibraphone and Kalimba from MK1. Morphing
+  between them, and user preset management, are still to do. Worth
   doing after §1.4, because the pickup change moves the main morph axis.
