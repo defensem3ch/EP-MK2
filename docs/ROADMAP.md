@@ -261,22 +261,66 @@ MK1 falls 16.4 dB across the keyboard; MK2 spans 6.8 dB, though it now rises
 towards the middle rather than falling. Overall level is lower and the master
 ceiling at +12 dB is there to make it up.
 
-#### The glitch detector, and what it was hiding
+#### The resonator had direct feedthrough, and that was the click
 
-The geometric pickup was producing a spiky waveform, and a fixed slope
-threshold did not survive it: a single isolated note tripped the old
-`d1 > 0.02` rule 8-25 times. `play_midi` now compares each jump against a
-running mean of |derivative| over 5 ms, so it flags steps rather than
-sharpness.
+With the step fixed, a note played quietly still clicked. The cause was older
+than the pickup work and had been there since 1.6: the resonator numerator
+`(1, 0, -1)` gives `h[0] = 1`, so **the output contained a copy of the hammer
+pulse** -- a sub-millisecond hump at full tone level, quite independent of any
+resonance. A resonator's displacement cannot instantaneously follow the force
+applied to it, so this was never physical, and it is a click by construction.
 
-**But the more useful lesson is the exemption.** Classifying anything within
-30 ms of a note-on as "within a note attack" is what let a 0.2969 step from
-silence be reported as normal for two commits. The onset is exactly where a
-click is most likely and least excusable. The counts are still separated, but
-the attack window is not a licence to stop looking.
+It showed up worst at low velocity because it does not scale the way the
+ringing does: at velocity 20 the attack peaked at 2.3 ms, on the pulse itself,
+rather than at 9.6 ms where the resonators finish building.
 
-With the coil rolloff in place the waveform is no longer spiky at all: the
-noodling render now reports **0 slope events**, down from 269.
+**Resonators are now two-pole with no zeros**, `b = (0, sin(w0), 0)`:
+
+* `h[0] = 0`, so no feedthrough.
+* **−12 dB/octave above resonance** where a bandpass gives only −6, so the
+  excitation's out-of-band content is rejected rather than leaking. The pickup
+  then differentiates, giving −6 dB/octave overall, which is what a magnetic
+  pickup on a struck tine actually does.
+* The `sin(w0)` numerator keeps ringing amplitude independent of pitch and Q --
+  measured 0.996 to 1.001 across 30 Hz to 4 kHz and Q 225 to 1642, a 0.0 dB
+  spread. A bare `b1 = 1` would ring as 1/sin(w0), which is 1/f^2 across the
+  keyboard and measured 25x pre-limiter at the bottom.
+
+That last property is not a detail: **it is what makes 1.3 possible**. Q now
+sets decay time and nothing else.
+
+Keyboard response, measured against the built binary:
+
+| note | 21 | 45 | 69 | 81 | 93 |
+| --- | --- | --- | --- | --- | --- |
+| MK1 | −14.7 | −14.4 | −15.0 | −17.4 | −23.1 |
+| MK2 | −27.8 | −25.0 | −20.9 | −20.8 | −24.7 |
+
+7 dB across notes 21-93, where MK1 spanned 16.4 dB falling. Level overall is
+lower; the +12 dB master ceiling is there for it.
+
+#### What the detectors could not do, and what replaced them
+
+Three attempts failed to catch this class of fault:
+
+* `play_midi`'s slope detector -- the click was perfectly smooth.
+* Onset level ratio -- the feedthrough sat only 1.46x above the note's own
+  level at velocity 20, under any threshold that would not fire constantly.
+* Onset high-frequency content -- measured 2.99x against a clean 1.96x, but
+  ranges overlapped across velocity, so nothing separated them.
+
+What works is testing the **property** rather than the symptom, on the filter
+rather than through the instrument: `designBandpass` must return `ff1 == 0` at
+every frequency and Q, and its ringing amplitude must not vary with either.
+Both are now in the suite. The audible-symptom check is kept as a coarse guard,
+but the exact invariant is what will fail if this regresses.
+
+The glitch detector was also rebuilt to compare each jump against a running
+mean of |derivative| rather than a fixed threshold, and the noodling render now
+reports **0 slope events**, down from 269. But the more useful lesson is its
+exemption: classifying anything within 30 ms of a note-on as "within a note
+attack" is what let a 0.2969 step from silence be reported as normal for two
+commits. The onset is exactly where a click is least excusable.
 
 ### 1.5 Oversampling, targeted
 

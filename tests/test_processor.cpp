@@ -174,6 +174,102 @@ int main()
         check(after < 1.0e-5f, "CC120 silences immediately", d);
     }
 
+    // ---- resonator invariants --------------------------------------------
+    // Tested on the filter itself rather than through the instrument, because
+    // the audible symptom is a poor detector.  The hammer pulse leaking
+    // through a resonator with direct feedthrough was a smooth hump that broke
+    // no discontinuity check and sat only ~1.4x above the note's own level --
+    // and it was plainly a click.  The property that was actually violated is
+    // exact, so test that instead.
+    {
+        // A resonator's displacement cannot instantaneously follow the force
+        // applied to it: h[0] must be zero.  With direct feedthrough the
+        // excitation appears in the output as itself, at full level, which is
+        // a click by construction.
+        bool noFeedthrough = true;
+        for (double f : { 30.0, 110.0, 440.0, 4000.0 })
+            for (double q : { 5.0, 225.0, 1642.0 })
+                if (epmk2::designBandpass((float)f, (float)q, 48000.0).ff1 != 0.0f)
+                    noFeedthrough = false;
+        check(noFeedthrough, "resonators have no direct feedthrough");
+
+        // Ringing amplitude must not depend on frequency or Q -- that is what
+        // lets decay time and level be set independently, and it is what makes
+        // a keyboard-varying Q possible at all (roadmap 1.3).
+        auto ringPeak = [](double f, double q) {
+            epmk2::Biquad b;
+            b.setCoeffs(epmk2::designBandpass((float)f, (float)q, 48000.0));
+            float peak = 0.0f, x = 1.0f;
+            for (int n = 0; n < 48000; ++n) {
+                peak = std::max(peak, std::fabs(b.process(x)));
+                x = 0.0f;
+            }
+            return peak;
+        };
+        float lo = 1.0e9f, hi = 0.0f;
+        for (double f : { 30.0, 110.0, 440.0, 4000.0 })
+            for (double q : { 225.0, 1642.0 }) {
+                const float r = ringPeak(f, q);
+                lo = std::min(lo, r);
+                hi = std::max(hi, r);
+            }
+        char rp[96];
+        snprintf(rp, sizeof rp, "  (%.3f to %.3f, %.1f dB spread)",
+                 lo, hi, 20.0f * std::log10(hi / std::max(1.0e-9f, lo)));
+        check(hi < lo * 2.0f, "ringing level is independent of pitch and Q", rp);
+    }
+
+    // ---- no click at the note onset --------------------------------------
+    // A click is not necessarily a discontinuity, so the slope detector in
+    // play_midi does not catch it: the hammer pulse leaking through a
+    // resonator with direct feedthrough was a perfectly smooth hump, and still
+    // a click.  What gives it away is that it does not scale with the note --
+    // it is loudest, relative to the tone, at quiet velocities.
+    //
+    // So: the first few milliseconds must not stick out above what the note
+    // settles to, at any velocity.
+    {
+        auto onsetVsBody = [&](int velocity, float& onset, float& body) {
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+
+            juce::MidiBuffer m;
+            m.addEvent(juce::MidiMessage::noteOn(1, 45, (juce::uint8)velocity), 0);
+            juce::AudioBuffer<float> b(2, block);
+            std::vector<float> out;
+            for (int i = 0; i < blocksPerSecond / 2; ++i) {
+                b.clear();
+                proc.processBlock(b, m);
+                m.clear();
+                for (int n = 0; n < block; ++n)
+                    out.push_back(b.getSample(0, n));
+            }
+            // The strike is delayed 2 ms; look at the 4 ms following it, then
+            // at where the note settles.
+            const int from = int(sr * 0.002), to = int(sr * 0.006);
+            onset = 0.0f;
+            for (int n = from; n < to && n < (int)out.size(); ++n)
+                onset = std::max(onset, std::fabs(out[n]));
+            body = 0.0f;
+            for (int n = int(sr * 0.05); n < int(sr * 0.25) && n < (int)out.size(); ++n)
+                body = std::max(body, std::fabs(out[n]));
+
+            renderPeak(proc, panic, 1, block);
+        };
+
+        bool clean = true;
+        for (int vel : { 20, 64, 117 }) {
+            float onset = 0.0f, body = 0.0f;
+            onsetVsBody(vel, onset, body);
+            const float ratio = onset / std::max(1.0e-9f, body);
+            printf("      velocity %3d: first 6 ms %.5f vs body %.5f  (%.2fx)\n",
+                   vel, onset, body, ratio);
+            if (ratio > 2.0f) clean = false;
+        }
+        check(clean, "no spike at the note onset");
+    }
+
     // ---- restriking a still-ringing tine ---------------------------------
     // The hammer strikes a tine that is already moving, so the result depends
     // on where in its cycle the strike lands.  Two repeats at different gaps

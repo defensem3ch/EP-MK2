@@ -416,7 +416,7 @@ private:
     // hard the pickup's tanh is driven.  Applied at the output instead, the
     // level would be right while the pickup sat permanently saturated.
 #ifndef EPMK2_RES_TRIM
-#define EPMK2_RES_TRIM 0.0024f
+#define EPMK2_RES_TRIM 0.0040f
 #endif
     static constexpr float kResonatorTrim = EPMK2_RES_TRIM;
 

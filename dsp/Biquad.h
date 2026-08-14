@@ -69,19 +69,36 @@ inline BiquadCoeffs designBandpass(double freqHz, double q, double sampleRate) n
     // across the keyboard impossible, since changing Q would swing the level
     // with it (roadmap 1.3).
     //
-    // The normalisation that suits an impulse-driven resonator is a unit
-    // *impulse response*, b0 = 1: struck by a force pulse, the mode rings at an
-    // amplitude set by the strike and its own level control, whatever its Q or
-    // its frequency.  Unit peak gain (b0 = alpha) does not do this -- its
-    // impulse response scales with sin(w0)/2Q, so the balance between modes
-    // would still move with pitch and decay time.
+    // A two-pole resonator with no zeros and a one-sample delay: b = (0, 1, 0).
+    // Two properties matter, and the bandpass numerator (1, 0, -1) has neither.
     //
-    // Note the steady-state gain at resonance is then 1/alpha, which is large.
-    // That is harmless for impulsive excitation but will matter if a resonator
-    // is ever driven continuously -- sympathetic coupling, roadmap 2.2.
-    const double b0 =  1.0;
-    const double b1 =  0.0;
-    const double b2 = -1.0;
+    //   * **No direct feedthrough.** h[0] = 0.  A resonator's displacement
+    //     cannot instantaneously follow the force applied to it, but with
+    //     b0 = 1 the output contained a copy of the hammer pulse -- a
+    //     sub-millisecond hump appearing in the audio at full tone level,
+    //     independent of any resonance.  That is a click by construction, and
+    //     it is what a quiet note made audible: the transient does not scale
+    //     down with velocity the way the ringing does.
+    //   * **-12 dB/octave above resonance**, where a bandpass gives only -6.
+    //     Force-to-displacement really is second order, so the excitation's
+    //     out-of-band content is properly rejected instead of leaking through.
+    //     The pickup then differentiates, giving -6 dB/octave overall, which
+    //     is what a magnetic pickup on a struck tine actually does.
+    //
+    // The numerator is sin(w0), not 1.  An all-pole resonator's impulse
+    // response rings at roughly b1/sin(w0), so a bare b1 = 1 makes low notes
+    // enormously louder than high ones -- 1/f^2 across the keyboard, which
+    // measured as 25x pre-limiter at the bottom.  Scaling by sin(w0) leaves the
+    // ringing amplitude set by the strike and the mode's own level control,
+    // whatever its frequency or its Q.  That independence is also what makes a
+    // keyboard-varying Q possible (1.3): Q changes the decay, not the level.
+    //
+    // Steady-state gain at resonance is 1/alpha, which is large.  Harmless for
+    // impulsive excitation, but it will matter if a resonator is ever driven
+    // continuously -- sympathetic coupling, roadmap 2.2.
+    const double b0 =  0.0;
+    const double b1 =  sinw0;
+    const double b2 =  0.0;
     const double a0 =  1.0 + alpha;
     const double a1 = -2.0 * cosw0;
     const double a2 =  1.0 - alpha;
