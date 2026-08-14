@@ -16,6 +16,10 @@
 
 namespace epmk2 {
 
+// dsp/ stays free of framework headers, so this is spelled out rather than
+// reaching for juce::jmax.
+inline int juce_max(int a, int b) noexcept { return a > b ? a : b; }
+
 struct EngineParams {
     VoiceParams voice;
 
@@ -43,6 +47,11 @@ class Engine {
 public:
     static constexpr int kMaxVoices = 128;
 
+    // Divides the sympathetic control down to something a bank of Q-3000
+    // resonators can be fed without howling.  Set by measurement: see the
+    // stability check in tests/.
+    static constexpr float kCouplingScale = 0.1f;
+
     void setVoiceCount(int n) noexcept
     {
         const int wanted = std::max(1, std::min(n, kMaxVoices));
@@ -64,6 +73,9 @@ public:
         for (int i = 0; i < kMaxVoices; ++i)
             voices[i].prepare(sr);
         tremoloPhase = 0.0f;
+        couplingBus = 0.0f;
+        coupledLast = 0;
+        voiceLast.fill(0.0f);
         rngState = 0x9E3779B9u;
         dcBlockX1 = dcBlockY1 = dcBlockX1R = dcBlockY1R = 0.0f;
         dcBlockCoeff = float(1.0 - 2.0 * M_PI * 5.0 / sr);   // hip~ 5
@@ -120,6 +132,9 @@ public:
     {
         for (int i = 0; i < voiceCount; ++i)
             voices[i].reset();
+        couplingBus = 0.0f;
+        coupledLast = 0;
+        voiceLast.fill(0.0f);
         dcBlockX1 = dcBlockY1 = dcBlockX1R = dcBlockY1R = 0.0f;
     }
 
@@ -133,10 +148,47 @@ public:
         shaper.setGeometry(p.voice.pickupDistance, p.voice.pickupOffset);
         setVoiceCount(p.polyphony);
 
+        // Sympathetic resonance: every undamped tine hears what the others are
+        // doing, through the frame they share.  The bus is last sample's sum,
+        // which breaks the algebraic loop -- and the delay is physically
+        // honest anyway, since the frame does not transmit instantly.
+        //
+        // The gain has to be small.  These resonators peak at their own Q,
+        // which key variation pushes past 3000, so it is the *loop* gain that
+        // must stay under unity and the coupling is divided down accordingly.
+        // Divided by however many tines are listening, so this is the *average*
+        // of the others rather than their sum.  With a sum the loop gain grew
+        // with the number of held notes: a chord was fine and a pedalled
+        // handful of notes turned the instrument into a self-sustaining drone
+        // that never decayed, then diverged outright.  Averaging makes the
+        // control mean the same thing whether two notes are held or seventy.
+        const float couple = p.voice.sympathetic * kCouplingScale
+                           / (float) juce_max(1, coupledLast - 1);
+        const bool coupling = p.voice.sympathetic > 0.0f;
+
+        int coupledNow = 0;
         float sum = 0.0f;
         for (int i = 0; i < voiceCount; ++i)
-            if (voices[i].isActive())
-                sum += voices[i].process(p.voice, shaper);
+            if (voices[i].isActive()) {
+                // A damper resting on a tine stops it responding to anything.
+                const bool damperOff = voices[i].isHeld() || p.voice.sustainPedal;
+                const bool coupled = damperOff && coupling;
+                // What the *other* tines are doing.  Feeding a voice its own
+                // output back merely alters its own decay -- lengthening or
+                // shortening it depending on the phase the round trip happens
+                // to have -- which is not sympathy, and measured as the held
+                // notes getting quieter the more of it was applied.
+                const float drive = coupled ? (couplingBus - voiceLast[i]) * couple
+                                            : 0.0f;
+                const float out = voices[i].process(p.voice, shaper, drive, coupled);
+                voiceLast[i] = out;
+                sum += out;
+                coupledNow += coupled ? 1 : 0;
+            } else {
+                voiceLast[i] = 0.0f;
+            }
+        couplingBus = sum;
+        coupledLast = coupledNow;
 
         sum *= 0.5f * p.masterLin;
 
@@ -284,6 +336,9 @@ private:
     PickupShaper shaper;
 
     float tremoloPhase = 0.0f;
+    float couplingBus = 0.0f;
+    int coupledLast = 0;
+    std::array<float, kMaxVoices> voiceLast {};
     uint32_t rngState = 0x9E3779B9u;
     float dcBlockX1 = 0.0f, dcBlockY1 = 0.0f;
     float dcBlockX1R = 0.0f, dcBlockY1R = 0.0f;

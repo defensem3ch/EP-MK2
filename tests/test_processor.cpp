@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <functional>
+#include <limits>
 #include <set>
 #include <vector>
 #include <algorithm>
@@ -926,6 +927,119 @@ int main()
         if (auto* q = proc.getState().getParameter("polyphony"))
             q->setValueNotifyingHost(q->convertTo0to1(32.0f));
         proc.prepareToPlay(sr, block);
+    }
+
+    // ---- sympathetic resonance -------------------------------------------
+    // Tines share a frame, so an undamped one answers whatever else is
+    // sounding.  This is a feedback loop around a bank of resonators whose
+    // gain at their own frequency is their Q -- into the thousands here -- so
+    // stability is the thing to check, not the effect.
+    {
+        auto set = [&](const char* id, float v) {
+            if (auto* q = proc.getState().getParameter(id))
+                q->setValueNotifyingHost(q->convertTo0to1(v));
+        };
+        auto silence = [&] {
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+        };
+
+        // The classic demonstration: hold a chord silently, strike a low note,
+        // and the chord answers.
+        auto heldChordLevel = [&](float amount) {
+            set("sympathetic", amount);
+            set("key_var", 0.0f);
+            set("strike_var", 0.0f);
+            proc.prepareToPlay(sr, block);
+            silence();
+
+            juce::MidiBuffer hold;
+            hold.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
+            for (int n : { 64, 68, 71 })
+                hold.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8)1), 1);
+            renderPeak(proc, hold, blocksPerSecond, block);
+
+            juce::MidiBuffer strike;
+            strike.addEvent(juce::MidiMessage::noteOn(1, 28, (juce::uint8)120), 0);
+            juce::AudioBuffer<float> b(2, block);
+            std::vector<float> out;
+            for (int i = 0; i < blocksPerSecond * 2; ++i) {
+                b.clear();
+                proc.processBlock(b, strike);
+                strike.clear();
+                for (int k = 0; k < block; ++k) out.push_back(b.getSample(0, k));
+            }
+            silence();
+
+            // Energy at the held chord's pitches.
+            double total = 0.0;
+            for (int n : { 64, 68, 71 }) {
+                const double f = 440.0 * std::pow(2.0, (n - 69) / 12.0);
+                const double w = 2.0 * M_PI * f / sr, c = 2.0 * std::cos(w);
+                double s0 = 0, s1 = 0, s2 = 0;
+                for (float v : out) { s0 = v + c * s1 - s2; s2 = s1; s1 = s0; }
+                total += std::sqrt(std::max(0.0, s1*s1 + s2*s2 - c*s1*s2)) / out.size();
+            }
+            return total;
+        };
+
+        const double quiet = heldChordLevel(0.0f);
+        const double rung  = heldChordLevel(1.0f);
+        char sy[96];
+        snprintf(sy, sizeof sy, "  (%.1f dB more at the held pitches)",
+                 20.0 * std::log10(rung / std::max(1e-15, quiet)));
+        check(rung > quiet * 1.5, "a silently held chord answers a struck note", sy);
+
+        // Stability, at twice the control's maximum with a keyboard's worth of
+        // undamped voices and the widest spread of Q.  A sum rather than an
+        // average here made the loop gain grow with the number of held notes:
+        // stable on a chord, a drone that never decayed on a pedalled handful.
+        {
+            set("sympathetic", 1.0f);
+            set("key_var", 1.0f);
+            set("polyphony", 128.0f);
+            proc.prepareToPlay(sr, block);
+            silence();
+
+            juce::MidiBuffer midi;
+            midi.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
+            for (int n = 28; n < 96; ++n)
+                midi.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8)110), 1);
+            const float early = renderPeak(proc, midi, blocksPerSecond * 2, block);
+            juce::MidiBuffer none;
+            renderPeak(proc, none, blocksPerSecond * 10, block);
+            const float late = renderPeak(proc, none, blocksPerSecond * 2, block);
+
+            char st[96];
+            snprintf(st, sizeof st, "  (%.4f -> %.4f over 14 s, %d voices)",
+                     early, late, proc.getActiveVoiceCount());
+            check(std::isfinite(late) && late < early * 0.95,
+                  "coupling stays stable with a keyboard held down", st);
+            silence();
+        }
+
+        set("sympathetic", 0.35f);
+        set("key_var", 0.35f);
+        set("strike_var", 0.30f);
+        set("polyphony", 32.0f);
+        proc.prepareToPlay(sr, block);
+    }
+
+    // A NaN reaching the pickup's lookup table used to index far outside it --
+    // undefined, and in practice a segfault in the host rather than a wrong
+    // sample.  It cannot arrive through the audio path, but it must not be
+    // able to take the session down if it ever does.
+    {
+        epmk2::PickupShaper sh;
+        sh.setGeometry(0.8f, 0.8f);
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        const float inf = std::numeric_limits<float>::infinity();
+        const bool ok = std::isfinite(sh.process(nan))
+                     && std::isfinite(sh.process(inf))
+                     && std::isfinite(sh.process(-inf))
+                     && std::isfinite(sh.process(1.0e30f));
+        check(ok, "the pickup table survives a NaN without leaving its bounds");
     }
 
     // ---- factory presets -------------------------------------------------

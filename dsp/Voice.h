@@ -151,6 +151,12 @@ struct VoiceParams {
     // randomness, and it is what a sample cannot do.
     float strikeVariation = 0.30f;
 
+    // How strongly the frame carries one tine's vibration to the others.
+    // Small by design: a resonator's gain at its own frequency is its Q, which
+    // reaches into the thousands here, so the loop gain around the coupling
+    // path is what has to stay well under unity -- not the coupling itself.
+    float sympathetic = 0.35f;
+
     bool sustainPedal = false;
 };
 
@@ -330,7 +336,11 @@ public:
             noteOff(p);
     }
 
-    inline float process(const VoiceParams& p, const PickupShaper& shaper) noexcept
+    // `coupling` is what the rest of the instrument is doing, arriving through
+    // the frame the tines are mounted on.  It is only ever passed in for a
+    // voice whose damper is off; a damped tine cannot respond.
+    inline float process(const VoiceParams& p, const PickupShaper& shaper,
+                         float coupling = 0.0f, bool keepAlive = false) noexcept
     {
         // --- amplitude reset envelope --------------------------------------
         if (gateRestoreAt > 0 && --gateRestoreAt == 0) {
@@ -361,7 +371,11 @@ public:
         }
 
         // --- tone bar ------------------------------------------------------
-        const float excite = strike + release;
+        // The frame drives the whole assembly, not just the tine: the tone bar
+        // is what carries the fundamental, so coupling that reached only the
+        // tine excited the inharmonic modes at 7.1x and above and left the
+        // pitch of a sympathetically ringing note entirely absent.
+        const float excite = strike + release + coupling;
         const float toneRaw = toneBar.process(excite) * 0.707946f * kResonatorTrim;
         // Routed exactly like the tone bar -- into the pickup and into the
         // direct sum -- because it is the same piece of metal.  Note the
@@ -374,7 +388,9 @@ public:
 
         // --- tine ----------------------------------------------------------
         // Modes above Nyquist are skipped rather than run: see configure().
-        const float tineIn = tineHighpass.process(strike) * gate;
+        // The frame's vibration drives the tine exactly as the hammer does, so
+        // it joins the excitation rather than being mixed into the output.
+        const float tineIn = tineHighpass.process(strike + coupling) * gate;
         float tineRaw = 0.0f;
         if (mode1Active) tineRaw += tine1.process(tineIn);
         if (mode2Active) tineRaw += tine2.process(tineIn) * p.tineMode2LevelLin;
@@ -444,7 +460,15 @@ public:
         // Retire once inaudible.  This deliberately does not require the key
         // to be up: with the sustain pedal down a released note keeps `held`
         // false but never decays, and a note held to silence should also go.
-        if (strikeRamp <= 0.0f && noteOffRamp <= 0.0f && envelope < kSilence)
+        // A tine with its damper off never really stops -- it stays available to
+        // be driven by the rest of the instrument.  Retiring it on level alone
+        // is what made the classic demonstration impossible: hold a chord
+        // silently, and its voices were gone before the note meant to excite
+        // them was struck.  Only kept alive when something can actually drive
+        // it, since otherwise this would pin every played voice for as long as
+        // the pedal is down for no benefit.
+        if (strikeRamp <= 0.0f && noteOffRamp <= 0.0f && envelope < kSilence
+            && !keepAlive)
             active = false;
 
         return out;

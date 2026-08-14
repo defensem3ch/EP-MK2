@@ -452,26 +452,55 @@ discontinuities**. Peak voices for that performance fell from 10 to 6 and CPU
 from 0.8% to 0.7% of a core, because repeats no longer stack a second voice per
 pitch — a real Rhodes has one tine per note.
 
-### 2.2 Sympathetic resonance
+### 2.2 Sympathetic resonance — **done**
 
-**The observation:** with the sustain pedal down, undamped tines are excited by
-their neighbours through the shared frame.
+`Sympathetic` in the Tone Bar section, default 0.35. Every tine whose damper is
+off hears what the others are doing, through the frame they share. Measured on
+the classic demonstration -- hold a chord silently, strike a low note --
+**12.2 dB more energy at the held pitches** at full.
 
-**Implementation.** A shared coupling bus in `Engine`: sum voice outputs, feed a
-scaled fraction into the tine input of every voice whose damper is *off*
-(`!held` with pedal down, plus the always-undamped top octave on a real
-Rhodes). Two hazards:
+Four things had to be right, and each was wrong first:
 
-* **Feedback stability.** These are Q≈1600 resonators; a coupling loop can and
-  will blow up. Break the algebraic loop with a one-block delay and keep total
-  loop gain well under unity, with a hard limiter as a backstop.
-* **Cost.** Coupling means idle-but-undamped voices now do work. Voices already
-  retire at −80 dBFS; sympathetic excitation will keep them alive longer, so
-  measure the pedal-down voice count before and after.
+**It must reach the tone bar, not just the tine.** Coupling into the tine input
+alone excited modes at 7.1x the note and above, so a sympathetically ringing
+note had no pitch at all -- the fundamental comes from the tone bar. The frame
+drives the whole assembly.
 
-**Verify:** hold a chord silently (pedal down, keys struck and released), strike
-a low note, and confirm energy appears at the held notes' frequencies. Then
-re-check CPU at 32 sounding voices with the pedal down.
+**A voice must not hear itself.** The bus is the sum of all voices, so
+subtracting nothing meant every voice fed its own output back one sample late,
+which merely alters its own decay depending on the phase of the round trip. It
+measured as the held notes getting *quieter* the more coupling was applied.
+
+**It has to be an average, not a sum.** With a sum the loop gain grew with the
+number of held notes: fine on a chord, and with a pedalled seventy notes the
+instrument became a self-sustaining drone that never decayed, then diverged
+outright. Dividing by the number of listening tines makes the control mean the
+same thing whether two notes are held or seventy. Stable now at twice the
+control's maximum with 68 voices and the widest spread of Q.
+
+**Undamped voices cannot retire on level alone.** They were being retired as
+inaudible before the note meant to excite them was struck, so the demonstration
+was impossible by construction. They are kept alive only while coupling is
+switched on, since otherwise this would pin every played voice for as long as
+the pedal is down for nothing.
+
+#### The crash it exposed
+
+Driving the coupling past stability produced a **segfault**, not a NaN.
+`PickupShaper::process` tested `x <= -1` and `x >= 1`, and both are false for
+NaN, so a NaN reached `int(pos)` -- undefined, and in practice an index far
+outside the table. Written as negations now, so a NaN takes the first branch.
+
+That bug was reachable by anything that could put a NaN in the audio path, and
+would have taken the host down rather than making a bad sound. It had nothing
+to do with sympathetic resonance beyond being found by it.
+
+#### Cost
+
+Coupling keeps undamped voices alive, so a pedalled passage accumulates voices
+up to the polyphony limit -- about 13% of a core at the default 32, and 25% at
+64. Setting `Sympathetic` to 0 restores the old retire-on-silence behaviour
+exactly.
 
 ### 2.3 Variation — **done**, and it turned out to be two things
 

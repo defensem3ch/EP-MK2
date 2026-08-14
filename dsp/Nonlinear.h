@@ -105,10 +105,15 @@ public:
 
     inline float process(float x) const noexcept
     {
-        // tanhApprox() clips to [-1, 1], so this cannot leave the table; the
-        // clamp is here only so a future change upstream cannot corrupt memory.
-        if (x <= -1.0f) return curve[0];
-        if (x >=  1.0f) return curve[kSize];
+        // Written as negations so that a NaN takes the first branch.  Ordinary
+        // comparisons are *both* false for NaN, so `x <= -1` and `x >= 1` would
+        // let it through to `int(pos)`, which is undefined and in practice
+        // indexes far outside the table -- a segfault in the host rather than
+        // a wrong sample.  The input is bounded by tanh upstream and should
+        // never be NaN; this is here so that if it ever is, the plugin
+        // misbehaves quietly instead of taking the session down.
+        if (!(x > -1.0f)) return curve[0];
+        if (!(x <  1.0f)) return curve[kSize];
 
         const float pos = (x + 1.0f) * (0.5f * float(kSize));
         const int   i   = int(pos);

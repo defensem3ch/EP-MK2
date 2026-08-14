@@ -109,6 +109,8 @@ inline const std::vector<Spec>& table()
           "How much the decay changes with pitch. Nearly flat by default: the reference instrument shows no reliable trend of decay against pitch at all." },
         { "tone_release",    "Tone Release",    "Tone Bar", Unit::Q,          1.0f,  2000.0f,   30.0f, true,
           "How quickly the note dies once the key is up and the damper lands. Much shorter than the sustained decay." },
+        { "sympathetic",     "Sympathetic",     "Tone Bar", Unit::Ratio,      0.0f,     1.0f,   0.35f, false,
+          "How strongly the tines hear each other through the frame they share. Undamped tines ring in response to whatever else is sounding, which is most obvious with the pedal down." },
         { "sub_level",       "Sub Level",       "Tone Bar", Unit::Decibels, -100.0f,     0.0f,  -30.0f, false,
           "Level of the partial below the fundamental that the tone bar produces. Adds weight and depth without adding pitch." },
         { "sub_ratio",       "Sub Ratio",       "Tone Bar", Unit::Ratio,      0.2f,     1.0f,   0.55f, true,
