@@ -87,6 +87,18 @@ struct VoiceParams {
     // contact as well as more force, and that is where "harder is brighter"
     // physically comes from.
     float hammerVelContact = 1.5f;
+    // How far the tine swings for a given strike, against pitch.  A hammer
+    // imparts momentum, and the displacement that produces goes as 1/omega --
+    // a bass tine swings much further than a treble one for the same blow.
+    // Without this the pickup's differentiator, which is a genuine +6 dB per
+    // octave, tilts the whole keyboard against the bass: MK2 measured 9.3 dB
+    // down at note 21 against MK1 and level at note 81.
+    //
+    // 1.0 is the bare 1/omega law and overshoots badly -- the bass ends up
+    // 25 dB above the treble -- because a bass tine is also far more massive,
+    // which offsets part of it.  0.5 lands note 21 at -13.5 dB against MK1's
+    // -14.7, and is the default.  0 removes the compensation entirely.
+    float tineMassTracking = 0.5f;
 
     // pickup
     float pickupGainLin = 5.6234f;   // +15 dB
@@ -205,6 +217,8 @@ public:
         // where MK1 had it and this is a change of timbre rather than of level.
         strikeAmp = velocityAmp
                   * (kReferenceContactSec / std::max(1.0e-6f, contactSec));
+        if (p.tineMassTracking != 0.0f)
+            strikeAmp *= std::pow(kQReferenceFreq / frequency, p.tineMassTracking);
         // The damper landing at note-off is a different, much softer contact,
         // so it keeps the period-width pulse it always had.
         releasePeriodSamples = float(sampleRate / frequency);
@@ -465,6 +479,7 @@ private:
 
     // A4: the pitch at which tone_decay means exactly what it says.
     static constexpr float kQReferenceNote = 69.0f;
+    static constexpr float kQReferenceFreq = 440.0f;
 
     // The impulse a unit-velocity strike delivers, expressed as the width of
     // an equivalent unit-height pulse.  Chosen so the instrument sits at a
@@ -482,7 +497,7 @@ private:
     // hard the pickup's tanh is driven.  Applied at the output instead, the
     // level would be right while the pickup sat permanently saturated.
 #ifndef EPMK2_RES_TRIM
-#define EPMK2_RES_TRIM 0.0040f
+#define EPMK2_RES_TRIM 0.0028f
 #endif
     static constexpr float kResonatorTrim = EPMK2_RES_TRIM;
 

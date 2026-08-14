@@ -56,6 +56,10 @@ inline const std::vector<Spec>& table()
         { "hammer_level",    "Hammer Level",    "Hammer", Unit::Decibels, -100.0f,     0.0f, -100.0f, false },
         { "hammer_contact",  "Contact Time",    "Hammer", Unit::Millis,     0.05f,   20.0f,    0.4f, false },
         { "hammer_vel_ctc",  "Vel to Contact",  "Hammer", Unit::Ratio,      0.0f,     4.0f,    1.5f, false },
+        // How much further a bass tine swings than a treble one for the same
+        // blow.  The pickup differentiates, which is a real +6 dB/octave, and
+        // without this the whole keyboard tilts against the bass.
+        { "bass_tilt",       "Bass Tilt",       "Hammer", Unit::Ratio,      0.0f,     1.5f,    0.5f, false },
 
         // --- tine: what actually vibrates -----------------------------------
         { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
