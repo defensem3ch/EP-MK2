@@ -46,7 +46,8 @@ inline const std::vector<Spec>& table()
         { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
         { "tine_send",       "Tine Send",       "Tine", Unit::Decibels, -100.0f,    24.0f,  -77.0f, false },
         // --- tone bar -------------------------------------------------------
-        { "tone_decay",      "Tone Decay",      "Tone Bar", Unit::Q,          1.0f,  2000.0f, 1642.18f, true },
+        { "tone_decay",      "Tone Decay",      "Tone Bar", Unit::Q,          1.0f,  4000.0f, 1334.0f, true },
+        { "q_tracking",      "Decay Tracking",  "Tone Bar", Unit::Ratio,      0.0f,     1.0f,  0.217f, true },
         { "tone_release",    "Tone Release",    "Tone Bar", Unit::Q,          1.0f,  2000.0f,   30.0f, true  },
         { "tone_level",      "Tone Level",      "Tone Bar", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
         { "hammer_level",    "Hammer Level",    "Tone Bar", Unit::Decibels, -100.0f,     0.0f, -100.0f, false },

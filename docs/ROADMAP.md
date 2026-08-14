@@ -131,22 +131,45 @@ mode soloed.
 **Verify:** solo the sub, confirm a peak at the intended ratio at the intended
 level, then confirm it survives the full chain.
 
-### 1.3 Q that varies across the keyboard
+### 1.3 Q that varies across the keyboard — **done, provisionally valued**
 
-**Now:** one global `toneQ` (default 1642.18) and one `tineQ` (225).
+Q of the fundamental is now a function of pitch:
 
-**Measured:** fundamental Q between 731 and 2175 across the keyboard (Shear,
-UCSB 2011, Table 2.1). A single value is wrong at both ends — the bass rings
-too short, the treble too long, or the compromise is wrong everywhere.
+```
+Q(note) = tone_decay * 2^(q_tracking * (note - 69) / 12)
+```
 
-**Implementation.** `configure()` already runs per voice with `frequency` in
-hand, so this costs nothing extra: replace the scalar with `Q(note)` from a
-curve fitted to Table 2.1. Keep the existing panel control as a **scale factor
-over that curve** rather than an absolute Q, so the parameter still does
-something musical and presets stay meaningful.
+`tone_decay` is Q **at A4** rather than everywhere, defaulting to 1334, and
+`q_tracking` is octaves of Q per octave of pitch, defaulting to 0.217. That
+spans **731 at note 21 to 2095 at note 105**. Setting `q_tracking` to 0
+restores a single global Q. The damper's release Q deliberately does not
+track -- that is the damper, not the tine.
 
-**Verify:** measure T60 per note from rendered notes and compare against the
-table; and against the sample benchmark (§3), which gives decay times directly.
+Measured T60, held, at default:
+
+| note | 21 | 45 | 69 | 93 | 105 |
+| --- | --- | --- | --- | --- | --- |
+| Q | 731 | 987 | 1334 | 1802 | 2095 |
+| flat Q | >40 s | 23.4 | 6.5 | 1.7 | 0.8 |
+| tracking | >40 s | 17.3 | 6.5 | 2.3 | 1.3 |
+
+**This was only possible because of the resonator normalisation.** Under the
+old constant-skirt-gain form, Q sweeping 731 to 2175 would have swung the level
+with it by about 9.5 dB, purely as an artefact, and the feature would have been
+unusable. Verified rather than assumed: peak level with tracking on versus off
+is 0.4473 against 0.4473 in the bass and 0.5726 against 0.5729 in the treble.
+Q sets decay and nothing else.
+
+**The values are provisional and should be treated as scaffolding.** The
+731-2175 range is recalled from Shear (UCSB 2011, Table 2.1) and is *not*
+verifiable from the papers on hand -- none of them carries a per-note Q table.
+The shape between the endpoints is assumed log-linear because that is the
+simplest curve through two remembered numbers, not because anything measured
+says so. The tine modes do not track at all yet; only the fundamental does.
+
+The sample benchmark (Part 3) measures per-partial decay times directly at 13
+pitches, which replaces every number in this section with a measured one. That
+is the next thing to build.
 
 ### 1.4 A pickup with geometry instead of two dB knobs — **done**
 

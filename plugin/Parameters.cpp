@@ -46,6 +46,7 @@ bool apply(const juce::AudioProcessorValueTreeState& tree,
         else if (id == "tine_send")       p.voice.tineSendLin = lin;
         // Tone bar
         else if (id == "tone_decay")      p.voice.toneQ = v;
+        else if (id == "q_tracking")      p.voice.toneQTracking = v;
         else if (id == "tone_release")    p.voice.toneReleaseQ = v;
         else if (id == "tone_level")      p.voice.toneLevelLin = lin;
         else if (id == "hammer_level")    p.voice.hammerLevelLin = lin;

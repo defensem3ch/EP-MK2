@@ -49,7 +49,20 @@ struct VoiceParams {
     float tineSendLin = 0.000141f;   // -77 dB
 
     // tone bar
-    float toneQ = 1642.18f;          // note-on
+    // Q of the fundamental *at the reference note* (A4).  Q now varies across
+    // the keyboard rather than being one global value -- see toneQTracking.
+    // 1334 is chosen so the curve passes through the range reported for a real
+    // instrument, 731 at the bottom of the keyboard to 2175 at the top.
+    float toneQ = 1334.0f;
+    // Octaves of Q per octave of pitch.  0.217 spans 731 to 2175 over MIDI
+    // notes 21 to 108; 0 restores a single global Q.
+    //
+    // PROVISIONAL.  The 731-2175 range is from Shear (UCSB 2011, Table 2.1)
+    // and is not verifiable from the papers on hand, and the shape between the
+    // endpoints is assumed log-linear rather than measured.  The sample
+    // benchmark gives per-partial decay times directly and should replace
+    // both -- see docs/ROADMAP.md Part 3.
+    float toneQTracking = 0.217f;
     float toneReleaseQ = 30.0f;      // note-off
     float toneLevelLin = 1.0f;
     float hammerLevelLin = 1.0e-5f;  // -100 dB
@@ -346,8 +359,20 @@ public:
     void configure(const VoiceParams& p, bool releasing) noexcept
     {
         const double sr = sampleRate;
+        // Q rises with pitch.  This is only possible because the resonators
+        // are normalised to a constant ringing amplitude: under the old
+        // constant-skirt-gain form, Q swept across the keyboard would have
+        // swung the level with it by about 9.5 dB, purely as an artefact.
+        // The damper's release Q does not track -- that is the damper, not
+        // the tine.
+        float toneQ = p.toneQ;
+        if (!releasing && p.toneQTracking != 0.0f)
+            toneQ *= std::pow(2.0f, p.toneQTracking * (note - kQReferenceNote) / 12.0f);
+        if (toneQ < 1.0f)      toneQ = 1.0f;
+        if (toneQ > 20000.0f)  toneQ = 20000.0f;
+
         toneBar.setCoeffs(designBandpass(frequency,
-                                         releasing ? p.toneReleaseQ : p.toneQ, sr));
+                                         releasing ? p.toneReleaseQ : toneQ, sr));
 
         // A mode whose frequency is past Nyquist does not exist on the real
         // instrument at that pitch, and must be skipped rather than clamped.
@@ -399,6 +424,9 @@ private:
     // Nyquist itself: a high-Q bandpass placed right at the edge is both
     // numerically poor and inaudible.
     static constexpr float kNyquistFraction = 0.45f;
+
+    // A4: the pitch at which tone_decay means exactly what it says.
+    static constexpr float kQReferenceNote = 69.0f;
 
     // The impulse a unit-velocity strike delivers, expressed as the width of
     // an equivalent unit-height pulse.  Chosen so the instrument sits at a

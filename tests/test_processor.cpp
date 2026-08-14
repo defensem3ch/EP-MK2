@@ -492,6 +492,63 @@ int main()
         proc.prepareToPlay(sr, block);
     }
 
+    // ---- Q varies across the keyboard ------------------------------------
+    // The point of the resonator normalisation: Q sets decay and nothing else.
+    // Under the old constant-skirt-gain form, sweeping Q across the keyboard
+    // would have swung the level with it by ~9.5 dB as a pure artefact, which
+    // is why this could not be done before.
+    {
+        auto decayAndPeak = [&](int midiNote, float tracking,
+                                float& tail, float& peak) {
+            if (auto* q = proc.getState().getParameter("q_tracking"))
+                q->setValueNotifyingHost(q->convertTo0to1(tracking));
+            proc.prepareToPlay(sr, block);
+
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+
+            juce::MidiBuffer m;
+            m.addEvent(juce::MidiMessage::noteOn(1, midiNote, (juce::uint8)110), 0);
+            peak = renderPeak(proc, m, blocksPerSecond / 4, block);
+            // How much is left after two seconds, with the key still held.
+            juce::MidiBuffer none;
+            renderPeak(proc, none, blocksPerSecond * 2, block);
+            tail = renderPeak(proc, none, blocksPerSecond / 4, block);
+
+            renderPeak(proc, panic, 1, block);
+        };
+
+        float flatLowTail = 0.0f, flatLowPeak = 0.0f;
+        float trkLowTail  = 0.0f, trkLowPeak  = 0.0f;
+        decayAndPeak(33, 0.0f,   flatLowTail, flatLowPeak);
+        decayAndPeak(33, 0.217f, trkLowTail,  trkLowPeak);
+
+        float flatHiTail = 0.0f, flatHiPeak = 0.0f;
+        float trkHiTail  = 0.0f, trkHiPeak  = 0.0f;
+        decayAndPeak(93, 0.0f,   flatHiTail, flatHiPeak);
+        decayAndPeak(93, 0.217f, trkHiTail,  trkHiPeak);
+
+        char d1[128];
+        snprintf(d1, sizeof d1, "  (bass %.4f -> %.4f, treble %.5f -> %.5f)",
+                 flatLowTail, trkLowTail, flatHiTail, trkHiTail);
+        // Tracking lowers Q in the bass and raises it in the treble, so the
+        // bass should decay further in the same time and the treble less.
+        check(trkLowTail < flatLowTail * 0.9f && trkHiTail > flatHiTail * 1.1f,
+              "decay tracking shortens the bass and lengthens the treble", d1);
+
+        char d2[128];
+        snprintf(d2, sizeof d2, "  (bass %.4f vs %.4f, treble %.4f vs %.4f)",
+                 flatLowPeak, trkLowPeak, flatHiPeak, trkHiPeak);
+        check(std::fabs(trkLowPeak - flatLowPeak) < flatLowPeak * 0.02f
+              && std::fabs(trkHiPeak - flatHiPeak) < flatHiPeak * 0.02f,
+              "changing Q does not change level", d2);
+
+        if (auto* q = proc.getState().getParameter("q_tracking"))
+            q->setValueNotifyingHost(q->convertTo0to1(0.217f));
+        proc.prepareToPlay(sr, block);
+    }
+
     // ---- factory presets -------------------------------------------------
     // A preset that loads but sounds like the one before it is not a preset,
     // so each is measured for level and brightness rather than merely checked
