@@ -31,6 +31,20 @@ EpMk2Processor::EpMk2Processor()
     epmk2::params::apply(state, params, lastParamValues);
 }
 
+juce::Point<int> EpMk2Processor::getSavedEditorSize() const
+{
+    return { (int) state.state.getProperty("editorWidth", 0),
+             (int) state.state.getProperty("editorHeight", 0) };
+}
+
+void EpMk2Processor::saveEditorSize(int width, int height)
+{
+    // No undo manager: a window resize is not an edit the user wants to undo
+    // through the parameter history.
+    state.state.setProperty("editorWidth", width, nullptr);
+    state.state.setProperty("editorHeight", height, nullptr);
+}
+
 void EpMk2Processor::getStateInformation(juce::MemoryBlock& destData)
 {
     if (auto xml = state.copyState().createXml())

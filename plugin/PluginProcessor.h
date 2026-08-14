@@ -42,6 +42,12 @@ public:
 
     juce::AudioProcessorValueTreeState& getState() noexcept { return state; }
 
+    // The editor's size lives in the same value tree as the parameters, so it
+    // travels with the session automatically -- getStateInformation already
+    // serialises the whole tree.  Returns {0, 0} when nothing has been saved.
+    juce::Point<int> getSavedEditorSize() const;
+    void saveEditorSize(int width, int height);
+
     bool isBusesLayoutSupported(const BusesProperties&) const { return true; }
 
 private:

@@ -797,6 +797,32 @@ int main()
         proc.setCurrentProgram(0);
     }
 
+    // ---- the window remembers its size -----------------------------------
+    {
+        juce::ScopedJuceInitialiser_GUI juceInit;
+        int reopened = 0, defaulted = 0, w = 0, h = 0;
+        {
+            std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
+            // Resize to something other than the default, as a user would.
+            w = ed->getWidth() * 5 / 4;
+            h = ed->getHeight() * 5 / 4;
+            ed->setSize(w, h);
+        }
+        // Round-trip the state the way a host saves and reloads a session.
+        juce::MemoryBlock blob;
+        proc.getStateInformation(blob);
+        proc.setStateInformation(blob.getData(), (int) blob.getSize());
+        {
+            std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
+            reopened = ed->getWidth();
+            defaulted = ed->getHeight();
+        }
+        char d[96];
+        snprintf(d, sizeof d, "  (%d x %d -> %d x %d)", w, h, reopened, defaulted);
+        check(std::abs(reopened - w) <= 2 && std::abs(defaulted - h) <= 2,
+              "the editor reopens at the size it was left", d);
+    }
+
     // The editor exists so hosts do not fall back to a generic view of JUCE's
     // ~2080 MIDI-CC parameters.  Render it through JUCE's software rasteriser
     // rather than a real window, so this is verifiable headlessly.

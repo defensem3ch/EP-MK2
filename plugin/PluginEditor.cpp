@@ -231,6 +231,11 @@ EpMk2Editor::EpMk2Editor(EpMk2Processor& p)
     : juce::AudioProcessorEditor(&p), proc(p), content(p, p.getState())
 {
     designHeight = content.designHeight();
+    // Read before anything sizes the window.  setResizeLimits() resizes a
+    // still-empty editor to the minimum to satisfy them, which fires resized()
+    // and would overwrite the stored size with 2/3 scale before we got to it.
+    const auto saved = proc.getSavedEditorSize();
+
     addAndMakeVisible(content);
 
     setResizable(true, true);
@@ -238,10 +243,18 @@ EpMk2Editor::EpMk2Editor(EpMk2Processor& p)
     // directions and nothing stretches.
     if (auto* c = getConstrainer())
         c->setFixedAspectRatio((double)kDesignWidth / (double)designHeight);
-    setResizeLimits(kDesignWidth * 2 / 3, designHeight * 2 / 3,
-                    kDesignWidth * 2,     designHeight * 2);
+    const int minW = kDesignWidth * 2 / 3, minH = designHeight * 2 / 3;
+    const int maxW = kDesignWidth * 2,      maxH = designHeight * 2;
+    setResizeLimits(minW, minH, maxW, maxH);
 
-    setSize(kDesignWidth, designHeight);
+    // Reopen at the size it was left at.  Clamped to the current limits rather
+    // than trusted, since the design size can change between versions and a
+    // stale value would otherwise reopen the window at a size this build does
+    // not allow.
+    if (saved.x >= minW && saved.x <= maxW && saved.y >= minH && saved.y <= maxH)
+        setSize(saved.x, saved.y);
+    else
+        setSize(kDesignWidth, designHeight);
     startTimerHz(10);
 }
 
@@ -257,6 +270,8 @@ void EpMk2Editor::paint(juce::Graphics& g)
 
 void EpMk2Editor::resized()
 {
+    proc.saveEditorSize(getWidth(), getHeight());
+
     const float scale = juce::jmin((float)getWidth()  / (float)kDesignWidth,
                                    (float)getHeight() / (float)designHeight);
     // Bounds are in pre-transform coordinates; JUCE maps mouse events through
