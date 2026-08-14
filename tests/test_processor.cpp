@@ -893,6 +893,41 @@ int main()
         proc.prepareToPlay(sr, block);
     }
 
+    // ---- polyphony reaches 128 -------------------------------------------
+    // kMaxVoices was always 128; only the parameter's range capped it at 64.
+    // Cost is linear in *sounding* voices -- idle ones are skipped outright
+    // and retire at -80 dBFS -- so the only question is whether they all
+    // actually sound.
+    {
+        if (auto* q = proc.getState().getParameter("polyphony"))
+            q->setValueNotifyingHost(q->convertTo0to1(128.0f));
+        proc.prepareToPlay(sr, block);
+
+        juce::MidiBuffer panic;
+        panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+        renderPeak(proc, panic, 1, block);
+
+        // A full 88-key keyboard, held: the realistic worst case.
+        juce::MidiBuffer midi;
+        midi.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
+        for (int n = 21; n < 109; ++n)
+            midi.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8)100), 1);
+        renderPeak(proc, midi, blocksPerSecond / 4, block);
+
+        const int sounding = proc.getActiveVoiceCount();
+        char pd[80];
+        snprintf(pd, sizeof pd, "  (%d voices)", sounding);
+        check(sounding >= 80, "a full keyboard sounds at once", pd);
+
+        juce::MidiBuffer up;
+        up.addEvent(juce::MidiMessage::controllerEvent(1, 64, 0), 0);
+        renderPeak(proc, up, 1, block);
+        renderPeak(proc, panic, 1, block);
+        if (auto* q = proc.getState().getParameter("polyphony"))
+            q->setValueNotifyingHost(q->convertTo0to1(32.0f));
+        proc.prepareToPlay(sr, block);
+    }
+
     // ---- factory presets -------------------------------------------------
     // A preset that loads but sounds like the one before it is not a preset,
     // so each is measured for level and brightness rather than merely checked

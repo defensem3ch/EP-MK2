@@ -54,7 +54,7 @@ inline const std::vector<Spec>& table()
         // Polyphony is a CPU control as much as a musical one.  With the
         // sustain pedal down a Rhodes note rings for tens of seconds, so every
         // voice is legitimately busy and cost scales with this directly.
-        { "polyphony",       "Polyphony",       "Output", Unit::Count,      4.0f,    64.0f,   32.0f, false,
+        { "polyphony",       "Polyphony",       "Output", Unit::Count,      4.0f,   128.0f,   32.0f, false,
           "How many notes may sound at once. Costs CPU directly: with the pedal down a note rings for tens of seconds, so voices stay genuinely busy." },
         { "sustain",         "Sustain Pedal",   "Output", Unit::Toggle,     0.0f,     1.0f,    0.0f, false,
           "Lifts the dampers, exactly as MIDI CC64 does. Released notes keep ringing until it drops." },
