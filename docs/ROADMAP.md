@@ -213,23 +213,70 @@ left as it stands rather than half-changed.
 Preset voicing is provisional: levelled and measurably distinct (27–54% apart),
 but tuned against numbers, not ears.
 
-#### A detector that had to be fixed too
+#### Correction: the differentiator was not in the build
 
-The geometric pickup produces a genuinely spiky waveform, and a fixed slope
-threshold does not survive that. A **single isolated note, with nothing
-happening after t=0**, tripped the old `d1 > 0.02` rule 8–25 times. Those are
-not clicks: a 0.027 jump at 48 kHz is an ordinary slew rate, where MK1's real
-crackle was 0.277. `play_midi` now compares each jump against a running mean of
-|derivative| over 5 ms, so it flags steps rather than sharpness. Result: 31
-slope events, all inside note attacks, **0 unexplained**.
+The commit that introduced 1.4 claimed the pickup senses dPhi/dt. It did not.
+The edit that was supposed to replace the static shaper silently failed to
+match, so what shipped was the **new geometry table driving the old static
+waveshaper**. The keyboard-tilt figures reported at the time came from the
+table shape alone, and the conclusion drawn from them -- that the
+differentiator had flattened the keyboard -- was wrong. A rebuild was done and
+the numbers did not move, which was taken as evidence against a hypothesis
+when it was really evidence the code had not changed.
 
-Two false leads on the way, recorded so they are not retried: the corners are
-*not* from `tanhApprox` joining its clamp with mismatched curvature (switching
-to `std::tanh` changed the count not at all, though it is kept, being both
-smooth and affordable at 0.8% CPU), and they are not from the flux
-differentiator starting from a stale `fluxPrev` — though that was a real bug
-and is fixed, since flux at rest is not zero and the step would have been
-multiplied by ~17.
+That also caused an audible fault. The flux table is a physical quantity and
+`Phi(0)` is a large non-zero constant, where the old symmetry curve had been
+zero at zero. Fed through a *static* shaper, that constant became a DC offset
+sitting in the voice output, and it stepped into existence the moment the gate
+reopened 2 ms into every note: a jump of **0.2969 from exact silence**, the
+same magnitude as MK1's original crackle, identical at every pitch and every
+contact time. Heard as a click at the start of every note.
+
+The differentiator removes it inherently, since it blocks DC.
+
+#### Two further things the differentiator then required
+
+* **`pickup_attack` now defaults to off (−100 dB).** It injects the hammer
+  pulse straight into the pickup, which no real pickup sees -- it senses the
+  tine, not the hammer. It existed to fake the attack transient the missing
+  tine modes should have supplied. Differentiated, a sub-millisecond pulse
+  through it is literally a click: 0.42 at note onset against a sustained level
+  of 0.34. With it off, 0.095.
+* **The coil rolloff moved after the differentiator.** `pickup_lopass` was
+  filtering the pickup's *input*. Physically the coil's inductance rolls off
+  its *output*, and a magnetic pickup is a differentiator followed by that
+  rolloff -- together a bandpass, not a rising tilt. Filtering the input left
+  the +6 dB/octave running unopposed and notes 81 and 93 drove the limiter at
+  3.1 pre-limit. Moved, nothing exceeds 0.70.
+
+Keyboard response with all three in place, and this time actually measured
+against the built binary:
+
+| note | 21 | 45 | 69 | 81 | 93 |
+| --- | --- | --- | --- | --- | --- |
+| MK1 | −14.7 | −14.4 | −15.0 | −17.4 | −23.1 |
+| MK2 | −24.6 | −22.3 | −18.2 | −17.8 | −21.5 |
+
+MK1 falls 16.4 dB across the keyboard; MK2 spans 6.8 dB, though it now rises
+towards the middle rather than falling. Overall level is lower and the master
+ceiling at +12 dB is there to make it up.
+
+#### The glitch detector, and what it was hiding
+
+The geometric pickup was producing a spiky waveform, and a fixed slope
+threshold did not survive it: a single isolated note tripped the old
+`d1 > 0.02` rule 8-25 times. `play_midi` now compares each jump against a
+running mean of |derivative| over 5 ms, so it flags steps rather than
+sharpness.
+
+**But the more useful lesson is the exemption.** Classifying anything within
+30 ms of a note-on as "within a note attack" is what let a 0.2969 step from
+silence be reported as normal for two commits. The onset is exactly where a
+click is most likely and least excusable. The counts are still separated, but
+the attack window is not a licence to stop looking.
+
+With the coil rolloff in place the waveform is no longer spiky at all: the
+noodling render now reports **0 slope events**, down from 269.
 
 ### 1.5 Oversampling, targeted
 

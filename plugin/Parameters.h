@@ -55,7 +55,7 @@ inline const std::vector<Spec>& table()
         { "noteoff_level",   "Note-Off Level",  "Tone Bar", Unit::Decibels, -100.0f,     0.0f,  -37.9f, false },
         // --- pickup ---------------------------------------------------------
         { "pickup_gain",     "Pickup Gain",     "Pickup", Unit::Decibels,    0.0f,    24.0f,   15.0f, false },
-        { "pickup_attack",   "Pickup Attack",   "Pickup", Unit::Decibels, -100.0f,    30.0f,  -31.0f, false },
+        { "pickup_attack",   "Pickup Attack",   "Pickup", Unit::Decibels, -100.0f,    30.0f, -100.0f, false },
         { "pickup_lopass",   "Pickup Low-Pass", "Pickup", Unit::Hertz,     20.0f, 20000.0f, 2000.0f, true  },
         // Geometry, replacing the old symmetry exponent.  Offset is what
         // creates asymmetry, so it is now the Rhodes-to-Wurlitzer axis: at 0

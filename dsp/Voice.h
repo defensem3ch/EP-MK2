@@ -69,7 +69,13 @@ struct VoiceParams {
 
     // pickup
     float pickupGainLin = 5.6234f;   // +15 dB
-    float pickupAttackLin = 0.0282f; // -31 dB
+    // Off by default.  This injects the hammer pulse straight into the
+    // pickup, which no real pickup sees -- it senses the tine, not the
+    // hammer.  It existed to fake an attack transient the missing tine modes
+    // should have supplied, and once the pickup differentiates its input, a
+    // raw sub-millisecond pulse through it is literally a click: it put a
+    // 0.42 step at the start of every note against a sustained level of 0.34.
+    float pickupAttackLin = 1.0e-5f; // -100 dB
     float pickupLowpassHz = 2000.0f;
     // Pickup geometry, in units of the tine's vibration amplitude.  These
     // replace the old "symmetry" exponent: offset is what actually produces
@@ -275,17 +281,42 @@ public:
         tineRaw *= kResonatorTrim;
 
         // --- pickup --------------------------------------------------------
-        const float pickupIn = pickupLowpass.process(strike * p.pickupAttackLin + toneRaw)
-                                   * p.pickupGainLin
+        const float pickupIn = (strike * p.pickupAttackLin + toneRaw) * p.pickupGainLin
                              + tineRaw * p.tineSendLin;
 
-        const float shaped = shaper.process(tanhApprox(pickupIn));
+        // The tine's excursion is bounded -- it cannot pass through the pickup
+        // -- and tanh is a reasonable bound.  What comes out is displacement.
+        // std::tanh rather than the Padé approximant used elsewhere: this feeds
+        // a differentiator, which would put the approximant's curvature
+        // mismatch straight into the audio.
+        const float disp = std::tanh(pickupIn);
+        // Flux linking the coil, from the pickup geometry.
+        const float flux = shaper.process(disp);
+        // The coil senses the *rate of change* of flux, not the flux.  This is
+        // the pickup's inherent +6 dB/octave, and it is also what keeps the
+        // output free of DC: flux at rest is a large non-zero constant, so a
+        // static shaper would put Phi(0) straight into the signal and step by
+        // it every time a voice's gate reopened -- a click at the start of
+        // every note.  inducedGain normalises the difference to unity at A4.
+        if (!fluxPrimed) {
+            fluxPrev = flux;
+            fluxPrimed = true;
+        }
+        const float induced = (flux - fluxPrev) * inducedGain;
+        fluxPrev = flux;
         // The patch's object is [*~ -1], but its right inlet is driven by the
         // buzz-phase control, which replaces the -1 argument: the toggle sends
         // +1 or -1 through [* 2] -> [- 1].  So the sign comes from the control,
         // not from the object's argument.
-        const float buzz = buzzFourth(shaped) * p.buzzPhase * p.buzzLevelLin;
-        const float pickupOut = bodyHighpass.process(shaped * p.pickupLevelLin + buzz);
+        // The coil's own inductance rolls the output off above a corner in the
+        // low kHz.  It belongs *after* the differentiator, not before the
+        // geometry: a real magnetic pickup is a differentiator followed by an
+        // inductive rolloff, which together make a bandpass.  Filtering the
+        // input instead leaves the +6 dB/octave running unopposed, and the top
+        // of the keyboard drives the limiter.
+        const float coil = pickupLowpass.process(induced);
+        const float buzz = buzzFourth(coil) * p.buzzPhase * p.buzzLevelLin;
+        const float pickupOut = bodyHighpass.process(coil * p.pickupLevelLin + buzz);
 
         // --- sum and output ------------------------------------------------
         const float mix = strike * p.hammerLevelLin
@@ -385,7 +416,7 @@ private:
     // hard the pickup's tanh is driven.  Applied at the output instead, the
     // level would be right while the pickup sat permanently saturated.
 #ifndef EPMK2_RES_TRIM
-#define EPMK2_RES_TRIM 0.0018f
+#define EPMK2_RES_TRIM 0.0024f
 #endif
     static constexpr float kResonatorTrim = EPMK2_RES_TRIM;
 
