@@ -47,6 +47,18 @@ The DSP being framework-free is load-bearing: it is what let the MK1 port be
 diffed sample-for-sample against the Heavy build, and it is what will let MK2's
 new model be fitted against recorded samples offline.
 
+## Documentation
+
+* **[docs/MODEL.md](docs/MODEL.md)** — how the model works, stage by stage, in
+  signal order. What each part is modelling, why it is built that way, and
+  which numbers came from measurement rather than from a paper or a guess.
+* **[docs/CHANGES-FROM-MK1.md](docs/CHANGES-FROM-MK1.md)** — what changed, and
+  why, ordered by how much it changes the sound.
+* **[docs/MODEL-NOTES.md](docs/MODEL-NOTES.md)** — the Rhodes/Wurlitzer/clav/
+  vibraphone morph axes, and what each control means physically.
+* **[docs/measurements/](docs/measurements/)** — analysis of the reference
+  sample library, and what it says the model should be doing.
+
 ## Where MK2 is going
 
 See **[docs/ROADMAP.md](docs/ROADMAP.md)** for the full list with
