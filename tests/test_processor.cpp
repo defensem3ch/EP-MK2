@@ -808,9 +808,12 @@ int main()
         int w = 0, h = 0;
         {
             std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
-            w = ed->getWidth() * 5 / 4;
-            h = ed->getHeight() * 5 / 4;
-            ed->setSize(w, h);
+            ed->setSize(ed->getWidth() * 5 / 4, ed->getHeight() * 5 / 4);
+            // Read back rather than assume: the constrainer holds a fixed
+            // aspect ratio and a maximum, so the size asked for is not always
+            // the size given.
+            w = ed->getWidth();
+            h = ed->getHeight();
         }
 
         // 1. A saved session reopens at the size it was saved with.
@@ -896,6 +899,25 @@ int main()
                 }
             };
             walk(ed.get());
+            // Value boxes sitting flush on the section border look unfinished.
+            int tightest = 10000;
+            juce::String tightestName;
+            std::function<void(juce::Component*)> margins = [&](juce::Component* comp) {
+                for (int k = 0; k < comp->getNumChildComponents(); ++k) {
+                    auto* child = comp->getChildComponent(k);
+                    if (auto* sec = dynamic_cast<ParamSection*>(child)) {
+                        const int m = sec->bottomMargin();
+                        if (m < tightest) { tightest = m; tightestName = sec->getName(); }
+                    }
+                    margins(child);
+                }
+            };
+            margins(ed.get());
+            char bm[96];
+            snprintf(bm, sizeof bm, "  (%d px, tightest is %s)",
+                     tightest, tightestName.toRawUTF8());
+            check(tightest >= 10, "sections have room below their last row", bm);
+
             char ov[128];
             snprintf(ov, sizeof ov, "  (%d control%s without a place%s%s)",
                      overflowing, overflowing == 1 ? "" : "s",

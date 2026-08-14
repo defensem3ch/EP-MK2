@@ -18,6 +18,11 @@ constexpr float kValueFont   = 16.0f;
 constexpr float kCreditFont  = 12.0f;
 // Room for two lines of label.
 constexpr int   kLabelHeight = 34;
+// Space below the last row of controls, inside a section.  Note a section is
+// inset by 4 on every side when it is positioned, so 8 of this is eaten by
+// that -- allowing only kPad here left the bottom row of value boxes sitting
+// flush on the section border.
+constexpr int   kSectionBottomPad = 22;
 constexpr int kPad           = 8;
 constexpr int kSectionColumns = 3;
 }
@@ -66,7 +71,7 @@ void ParamControl::resized()
     if (isToggle)
         button.setBounds(r.withSizeKeepingCentre(36, 36));
     else
-        slider.setBounds(r.reduced(2, 0));
+        slider.setBounds(r.reduced(2, 0).withTrimmedBottom(5));
 }
 
 //==============================================================================
@@ -94,6 +99,14 @@ int ParamSection::controlsNotPlaced() const
             ++bad;
     }
     return bad;
+}
+
+int ParamSection::bottomMargin() const
+{
+    int lowest = 0;
+    for (const auto* c : controls)
+        lowest = juce::jmax(lowest, c->getBottom());
+    return getHeight() - lowest;
 }
 
 int ParamSection::columnsForWidth(int width)
@@ -213,7 +226,7 @@ void PanelContent::computeLayout(int width)
 
         const int h = kSectionHeader + 4
                     + sections[i]->rowsNeeded(innerCols) * kControlHeight
-                    + kPad;
+                    + kSectionBottomPad;
         placements.push_back({ shortest, columnHeight[shortest], h });
         columnHeight[shortest] += h;
     }

@@ -45,6 +45,8 @@ public:
     // a section runs out of room its remaining controls keep empty bounds, so
     // the symptom is a *missing* control rather than one hanging outside.
     int controlsNotPlaced() const;
+    // Space between the lowest control and the bottom of the section.
+    int bottomMargin() const;
 
 private:
     juce::String title;
