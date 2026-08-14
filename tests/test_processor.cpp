@@ -549,6 +549,73 @@ int main()
         proc.prepareToPlay(sr, block);
     }
 
+    // ---- moving a control must not click ---------------------------------
+    // Hosts deliver parameter changes once per block, so a knob drag is a
+    // series of steps.  The pickup geometry rebuilds a lookup table, and the
+    // pickup differentiates its output -- so differencing this sample's flux
+    // against last sample's *stored* flux also differentiated the table change
+    // itself.  Stepping pickup_offset from 0.8 to 0 jumped the output by 0.33,
+    // as loud as the note.
+    {
+        auto stepMidNote = [&](const char* id, float from, float to) {
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+
+            auto* q = proc.getState().getParameter(id);
+            if (q == nullptr)
+                return 0.0f;
+            q->setValueNotifyingHost(q->convertTo0to1(from));
+            proc.prepareToPlay(sr, block);
+
+            juce::MidiBuffer m;
+            m.addEvent(juce::MidiMessage::noteOn(1, 45, (juce::uint8)110), 0);
+            juce::AudioBuffer<float> b(2, block);
+            std::vector<float> out;
+            const int blocks = blocksPerSecond;
+            for (int i = 0; i < blocks; ++i) {
+                if (i == blocks / 2)
+                    q->setValueNotifyingHost(q->convertTo0to1(to));
+                b.clear();
+                proc.processBlock(b, m);
+                m.clear();
+                for (int n = 0; n < block; ++n)
+                    out.push_back(b.getSample(0, n));
+            }
+            renderPeak(proc, panic, 1, block);
+
+            // The largest jump in the few samples either side of the change.
+            const int at = (blocks / 2) * block;
+            float jump = 0.0f;
+            for (int n = at - 4; n < at + 12 && n < (int)out.size(); ++n)
+                jump = std::max(jump, std::fabs(out[(size_t)n] - out[(size_t)n - 1]));
+            return jump;
+        };
+
+        struct { const char* id; float from, to; } moves[] = {
+            { "pickup_offset",   0.80f, 0.00f },
+            { "pickup_offset",   0.00f, 1.50f },
+            { "pickup_distance", 0.80f, 0.10f },
+            { "pickup_distance", 3.00f, 0.10f },
+            { "tone_decay",   1334.0f, 200.0f },
+        };
+        float worst = 0.0f;
+        const char* worstId = "";
+        for (const auto& mv : moves) {
+            const float j = stepMidNote(mv.id, mv.from, mv.to);
+            if (j > worst) { worst = j; worstId = mv.id; }
+        }
+        char sj[96];
+        snprintf(sj, sizeof sj, "  (worst %.4f, %s)", worst, worstId);
+        check(worst < 0.02f, "stepping a control mid-note does not click", sj);
+
+        // Put the defaults back.
+        for (const auto& spec : epmk2::params::table())
+            if (auto* q = proc.getState().getParameter(spec.id))
+                q->setValueNotifyingHost(q->convertTo0to1(spec.def));
+        proc.prepareToPlay(sr, block);
+    }
+
     // ---- factory presets -------------------------------------------------
     // A preset that loads but sounds like the one before it is not a preset,
     // so each is measured for level and brightness rather than merely checked

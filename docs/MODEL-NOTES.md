@@ -1,5 +1,13 @@
 # Model notes: what each control physically means, and where it can be pushed
 
+> **Some control names here are out of date.** This was written for MK1.
+> `pickup_symmetry` no longer exists -- the pickup is modelled from its
+> geometry now, and **`pickup_offset` is the axis this document describes as
+> symmetry**: at offset 0 the tine sits on the magnetic axis and the response
+> is purely even, and asymmetry increases as it moves away. Note the direction
+> is reversed from the old control, so a Wurlitzer wants a *low* offset. See
+> ROADMAP 1.4. The physical reasoning below is unaffected.
+
 Working notes for the instrument-morphing direction — the idea that this should
 do a Rhodes extremely well and then bend into a Wurlitzer, a clav, a
 vibraphone, a kalimba, and into things that could not physically exist.

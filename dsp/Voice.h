@@ -127,7 +127,7 @@ public:
         bodyHighpass.reset();
         keytrack1.reset();
         keytrack2.reset();
-        fluxPrev = 0.0f;
+        prevDisp = 0.0f;
         fluxPrimed = false;
     }
 
@@ -312,11 +312,18 @@ public:
         // it every time a voice's gate reopened -- a click at the start of
         // every note.  inducedGain normalises the difference to unity at A4.
         if (!fluxPrimed) {
-            fluxPrev = flux;
+            prevDisp = disp;
             fluxPrimed = true;
         }
-        const float induced = (flux - fluxPrev) * inducedGain;
-        fluxPrev = flux;
+        // Both points are evaluated on the *current* table.  Differencing
+        // this sample's flux against last sample's stored flux would also
+        // differentiate any change to the table itself, so moving the pickup
+        // while a note sounds would step the output by the difference between
+        // two geometries -- times inducedGain -- and click.  The rate of change
+        // of flux that a coil senses is due to the tine moving, not to the
+        // pickup being repositioned between samples.
+        const float induced = (flux - shaper.process(prevDisp)) * inducedGain;
+        prevDisp = disp;
         // The patch's object is [*~ -1], but its right inlet is driven by the
         // buzz-phase control, which replaces the -1 argument: the toggle sends
         // +1 or -1 through [* 2] -> [- 1].  So the sign comes from the control,
@@ -465,7 +472,7 @@ private:
     float  note = 69.0f;
     float  velocityAmp = 1.0f;
     float  strikeAmp = 1.0f;
-    float  fluxPrev = 0.0f;
+    float  prevDisp = 0.0f;
     bool   fluxPrimed = false;
     float  inducedGain = 1.0f;
 
