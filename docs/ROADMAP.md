@@ -455,9 +455,20 @@ pitch — a real Rhodes has one tine per note.
 ### 2.2 Sympathetic resonance — **done**
 
 `Sympathetic` in the Tone Bar section, default 0.35. Every tine whose damper is
-off hears what the others are doing, through the frame they share. Measured on
-the classic demonstration -- hold a chord silently, strike a low note --
-**12.2 dB more energy at the held pitches** at full.
+off hears what the others are doing, through the frame they share. Measured two ways, because
+the first one hides it: with the struck note still ringing it masks the
+sympathetic response, and the honest test is to *damp the struck note* and
+listen to what is left.
+
+| | held pitches, after the struck note is damped |
+| --- | --- |
+| off | −49.0 dB |
+| 0.35 (default) | ≈ −28 dB |
+| 1.0 | **−13.8 dB** |
+
+35 dB at full. The coupling scale was raised from 0.1 to 0.25 once stability
+had margin to spare -- it is stable at twice the control's maximum with 72
+undamped voices at the widest spread of Q.
 
 Four things had to be right, and each was wrong first:
 

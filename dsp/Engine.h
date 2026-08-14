@@ -50,7 +50,7 @@ public:
     // Divides the sympathetic control down to something a bank of Q-3000
     // resonators can be fed without howling.  Set by measurement: see the
     // stability check in tests/.
-    static constexpr float kCouplingScale = 0.1f;
+    static constexpr float kCouplingScale = 0.25f;
 
     void setVoiceCount(int n) noexcept
     {
