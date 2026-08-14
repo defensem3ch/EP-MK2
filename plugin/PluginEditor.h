@@ -74,6 +74,19 @@ private:
 struct PanelLookAndFeel : juce::LookAndFeel_V4
 {
     juce::Font getLabelFont(juce::Label&) override;
+
+    // A solid knob with the travelled range drawn as an arc around it, in the
+    // colour of the section it belongs to.  JUCE's default rotary puts a dot
+    // where the pointer is, which reads as a second object rather than as part
+    // of the knob.
+    void drawRotarySlider(juce::Graphics&, int x, int y, int width, int height,
+                          float pos, float startAngle, float endAngle,
+                          juce::Slider&) override;
+
+    // Toggles are LEDs, not tick boxes: a lit lamp reads as on from across a
+    // room, and a tick box reads as a form to fill in.
+    void drawToggleButton(juce::Graphics&, juce::ToggleButton&,
+                          bool highlighted, bool down) override;
 };
 
 class PanelContent : public juce::Component

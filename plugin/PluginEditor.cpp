@@ -5,7 +5,7 @@ using namespace epmk2::params;
 
 namespace {
 constexpr int kControlWidth  = 100;
-constexpr int kControlHeight = 112;
+constexpr int kControlHeight = 118;
 constexpr int kSectionHeader = 30;
 constexpr int kHeaderHeight  = 56;
 
@@ -18,7 +18,8 @@ constexpr float kValueFont   = 16.0f;
 constexpr float kCreditFont  = 12.0f;
 constexpr float kInfoFont    = 14.0f;
 // Room for two lines of label.
-constexpr int   kLabelHeight = 34;
+// Two lines of name, so every knob below it is the same size.
+constexpr int   kLabelArea   = 36;
 // Space below the last row of controls, inside a section.  Note a section is
 // inset by 4 on every side when it is positioned, so 8 of this is eaten by
 // that -- allowing only kPad here left the bottom row of value boxes sitting
@@ -37,6 +38,8 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
     : label(spec.name), help(spec.help), isToggle(spec.unit == Unit::Toggle)
 {
     if (isToggle) {
+        button.setColour(juce::ToggleButton::tickColourId,
+                         sectionColour(spec.section).withMultipliedSaturation(1.15f));
         addAndMakeVisible(button);
         button.addMouseListener(this, true);
         buttonAttachment = std::make_unique<
@@ -50,7 +53,10 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
         slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
         slider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff1c1c1c));
         slider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::white);
-        slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff8fb8d8));
+        // The travelled arc takes the colour of the section it sits in, so the
+        // pastel grouping does some work rather than only labelling a header.
+        slider.setColour(juce::Slider::rotarySliderFillColourId,
+                         sectionColour(spec.section).withMultipliedSaturation(1.15f));
         // Frequencies and Q span decades; a linear knob spends nearly all of
         // its travel where nothing interesting happens.
         if (spec.unit == Unit::Hertz || spec.unit == Unit::Q || spec.unit == Unit::Millis)
@@ -86,17 +92,21 @@ void ParamControl::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour(0xffe4e4e4));
     g.setFont(juce::FontOptions(kLabelFont, juce::Font::bold));
-    // Two lines, so a long name wraps instead of running into its neighbour.
-    g.drawFittedText(label, getLocalBounds().removeFromTop(kLabelHeight).reduced(2, 0),
-                     juce::Justification::centredTop, 2);
+    // The name area is a fixed two lines so that every knob comes out the same
+    // size -- sizing it to the text made controls with long names smaller than
+    // their neighbours.  The text is aligned to the *bottom* of that area, so
+    // a one-line name still sits directly above its knob rather than floating
+    // at the top of the cell with a gap under it.
+    g.drawFittedText(label, getLocalBounds().removeFromTop(kLabelArea).reduced(2, 0),
+                     juce::Justification::centredBottom, 2);
 }
 
 void ParamControl::resized()
 {
     auto r = getLocalBounds();
-    r.removeFromTop(kLabelHeight);
+    r.removeFromTop(kLabelArea);
     if (isToggle)
-        button.setBounds(r.withTrimmedBottom(10).withSizeKeepingCentre(36, 36));
+        button.setBounds(r.withTrimmedBottom(10).withSizeKeepingCentre(40, 40));
     else
         // The trim is the gap *between* rows.  It has to be larger than the
         // space between the knob and its own value, or proximity groups them
@@ -179,6 +189,98 @@ void ParamSection::resized()
 juce::Font PanelLookAndFeel::getLabelFont(juce::Label&)
 {
     return juce::Font(juce::FontOptions(kValueFont, juce::Font::bold));
+}
+
+void PanelLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y,
+                                        int width, int height, float pos,
+                                        float startAngle, float endAngle,
+                                        juce::Slider& slider)
+{
+    auto bounds = juce::Rectangle<int>(x, y, width, height).toFloat();
+    const float size = juce::jmin(bounds.getWidth(), bounds.getHeight());
+    auto square = bounds.withSizeKeepingCentre(size, size).reduced(2.0f);
+
+    const float ringWidth = juce::jmax(3.0f, size * 0.11f);
+    const float ringRadius = square.getWidth() * 0.5f - ringWidth * 0.5f;
+    const auto centre = square.getCentre();
+    const float angle = startAngle + pos * (endAngle - startAngle);
+
+    // The full travel, so the range is visible even where nothing is set.
+    juce::Path track;
+    track.addCentredArc(centre.x, centre.y, ringRadius, ringRadius, 0.0f,
+                        startAngle, endAngle, true);
+    g.setColour(juce::Colour(0xff4a4a4a));
+    g.strokePath(track, juce::PathStrokeType(ringWidth,
+                 juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    // How far it has travelled, in the section's own colour.
+    if (angle > startAngle + 0.01f) {
+        juce::Path value;
+        value.addCentredArc(centre.x, centre.y, ringRadius, ringRadius, 0.0f,
+                            startAngle, angle, true);
+        g.setColour(slider.findColour(juce::Slider::rotarySliderFillColourId));
+        g.strokePath(value, juce::PathStrokeType(ringWidth,
+                     juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+
+    // A solid body, so the knob reads as an object rather than an outline.
+    const float bodyRadius = ringRadius - ringWidth * 0.85f;
+    g.setColour(juce::Colour(0xff141414));
+    g.fillEllipse(juce::Rectangle<float>(bodyRadius * 2.0f + 3.0f,
+                                         bodyRadius * 2.0f + 3.0f)
+                      .withCentre(centre));
+    g.setColour(juce::Colour(0xffc0c0c0));
+    g.fillEllipse(juce::Rectangle<float>(bodyRadius * 2.0f, bodyRadius * 2.0f)
+                      .withCentre(centre));
+
+    // The pointer: a line to the rim, not a dot beside it.
+    juce::Path pointer;
+    const float thickness = juce::jmax(2.0f, size * 0.075f);
+    pointer.addRoundedRectangle(-thickness * 0.5f, -bodyRadius * 0.92f,
+                                thickness, bodyRadius * 0.62f, thickness * 0.5f);
+    pointer.applyTransform(juce::AffineTransform::rotation(angle)
+                               .translated(centre.x, centre.y));
+    g.setColour(juce::Colour(0xff303030));
+    g.fillPath(pointer);
+}
+
+void PanelLookAndFeel::drawToggleButton(juce::Graphics& g,
+                                        juce::ToggleButton& button,
+                                        bool highlighted, bool)
+{
+    auto bounds = button.getLocalBounds().toFloat();
+    const float size = juce::jmin(bounds.getWidth(), bounds.getHeight());
+    auto lamp = bounds.withSizeKeepingCentre(size, size).reduced(size * 0.14f);
+    const auto centre = lamp.getCentre();
+    const float radius = lamp.getWidth() * 0.5f;
+
+    const bool on = button.getToggleState();
+    const juce::Colour tint = button.findColour(juce::ToggleButton::tickColourId);
+
+    // The socket, so an unlit lamp still reads as something that could light.
+    g.setColour(juce::Colour(0xff141414));
+    g.fillEllipse(lamp.expanded(2.0f));
+
+    if (on) {
+        // Glow: a couple of soft rings outside the lamp itself.
+        for (int i = 3; i >= 1; --i) {
+            g.setColour(tint.withAlpha(0.13f / (float) i));
+            g.fillEllipse(lamp.expanded(radius * 0.55f * (float) i));
+        }
+        g.setColour(tint);
+        g.fillEllipse(lamp);
+        // A brighter centre, so it looks lit rather than merely filled.
+        g.setColour(tint.brighter(0.7f).withAlpha(0.85f));
+        g.fillEllipse(lamp.reduced(radius * 0.45f).translated(0.0f, -radius * 0.12f));
+    } else {
+        g.setColour(juce::Colour(0xff3a3a3a));
+        g.fillEllipse(lamp);
+        g.setColour(tint.withAlpha(highlighted ? 0.35f : 0.16f));
+        g.fillEllipse(lamp.reduced(radius * 0.34f));
+    }
+
+    g.setColour(juce::Colour(0xff0d0d0d));
+    g.drawEllipse(lamp, 1.4f);
 }
 
 PanelContent::~PanelContent()
