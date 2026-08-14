@@ -492,6 +492,47 @@ checked against it.
 
 ---
 
+## Part 4 — Playing it
+
+Neither of these is in the model at all yet, and both are things a player
+reaches for rather than refinements of the physics.
+
+### 4.1 Pitch bend
+
+MIDI pitch bend is currently ignored: `handleMidi` looks at note on/off, CC64,
+CC120 and CC123 and nothing else.
+
+The tuning already goes through `noteToFrequency`, so the value itself is easy.
+What is not free is that **bend has to move a note that is already sounding**,
+and every resonator's coefficients are derived at note-on. Retuning means
+re-deriving them per voice as the wheel moves, which is the same path
+`configureAll` takes for a parameter change -- so it needs to be smooth enough
+to sweep. Worth checking what that costs at 32 voices before assuming it is
+free, and worth checking it does not click: changing a high-Q resonator's
+frequency while it rings is exactly the kind of edit that steps the output.
+
+Range should be a parameter (±2 semitones conventionally).
+
+### 4.2 Vibrato
+
+Pitch modulation, as distinct from the tremolo already present -- that is
+amplitude. Same mechanism as pitch bend and best built on it: an LFO feeding
+the same per-voice retune path, with rate, depth, and delay-to-onset.
+
+Two things worth getting right, since a Rhodes is not a synth:
+
+* **Per-voice, not global phase.** A single LFO applied to every voice makes a
+  chord move as one object, which is the giveaway of a synthesiser. Real
+  instruments do not do this.
+* **It should interact with the pickup.** The pickup's output depends on where
+  the tine sits relative to the pole, so real vibrato on an electric piano is
+  not purely a pitch effect -- it also moves the geometry. Whether to model
+  that or leave vibrato purely in the pitch domain is a question for when 4.1
+  exists.
+
+Neither is on the critical path for the physics, but both are needed before
+anyone would call this playable.
+
 ## Deliberately not doing yet
 
 * **CLAP** — wanted, and MK1 will get it first; nothing here depends on it.

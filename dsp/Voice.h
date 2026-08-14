@@ -45,7 +45,13 @@ struct VoiceParams {
     // existed.  Physically this should be positive; the value wants measuring
     // off the sample benchmark rather than guessing, so it defaults to off.
     float tineModeDamping = 0.0f;
-    float tineLevelLin = 1.0f;
+// -6 dB.  Through the range the samples can actually resolve -- notes
+    // 49 to 85 -- the model's tine sat within a few dB of the instrument and
+    // fell with pitch at much the same rate, so no pitch scaling is wanted.
+    // What it was is too hot in the bass, where a 120 ms analysis window at
+    // 39 Hz is five cycles and the measurement cannot say anything useful.
+    // This is a judgement by ear, with the measurable range as a sanity check.
+    float tineLevelLin = 0.5012f;
     float tineSendLin = 0.000141f;   // -77 dB
 
     // tone bar

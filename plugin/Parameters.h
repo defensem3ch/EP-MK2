@@ -62,7 +62,7 @@ inline const std::vector<Spec>& table()
         { "bass_tilt",       "Bass Tilt",       "Hammer", Unit::Ratio,      0.0f,     1.5f,    0.5f, false },
 
         // --- tine: what actually vibrates -----------------------------------
-        { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
+        { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,   -6.0f, false },
         { "tine_send",       "Tine to Pickup",  "Tine", Unit::Decibels, -100.0f,    24.0f,  -77.0f, false },
         { "tine_ratio1",     "Mode 1 Ratio",    "Tine", Unit::Ratio,      0.0f,    30.0f,    7.1f, true  },
         { "tine_ratio2",     "Mode 2 Ratio",    "Tine", Unit::Ratio,      0.0f,    60.0f,   20.4f, true  },
