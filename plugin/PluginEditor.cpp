@@ -31,7 +31,7 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
         slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff8fb8d8));
         // Frequencies and Q span decades; a linear knob spends nearly all of
         // its travel where nothing interesting happens.
-        if (spec.unit == Unit::Hertz || spec.unit == Unit::Q)
+        if (spec.unit == Unit::Hertz || spec.unit == Unit::Q || spec.unit == Unit::Millis)
             slider.setSkewFactor(0.35);
         addAndMakeVisible(slider);
         sliderAttachment = std::make_unique<

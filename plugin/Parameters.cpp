@@ -50,6 +50,8 @@ bool apply(const juce::AudioProcessorValueTreeState& tree,
         else if (id == "tone_level")      p.voice.toneLevelLin = lin;
         else if (id == "hammer_level")    p.voice.hammerLevelLin = lin;
         else if (id == "noteoff_level")   p.voice.noteOffLevelLin = lin;
+        else if (id == "hammer_contact")  p.voice.hammerContactMs = v;
+        else if (id == "hammer_vel_ctc")  p.voice.hammerVelContact = v;
         // Pickup
         else if (id == "pickup_gain")     p.voice.pickupGainLin = lin;
         else if (id == "pickup_attack")   p.voice.pickupAttackLin = lin;

@@ -13,7 +13,7 @@
 // conversion lived somewhere other than the declaration.
 namespace epmk2::params {
 
-enum class Unit { Decibels, Linear, Hertz, Q, Ratio, Toggle, Count };
+enum class Unit { Decibels, Linear, Hertz, Q, Ratio, Toggle, Count, Millis };
 
 struct Spec {
     const char* id;
@@ -50,10 +50,12 @@ inline const std::vector<Spec>& table()
         { "tone_release",    "Tone Release",    "Tone Bar", Unit::Q,          1.0f,  2000.0f,   30.0f, true  },
         { "tone_level",      "Tone Level",      "Tone Bar", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
         { "hammer_level",    "Hammer Level",    "Tone Bar", Unit::Decibels, -100.0f,     0.0f, -100.0f, false },
+        { "hammer_contact",  "Hammer Contact",  "Tone Bar", Unit::Millis,     0.05f,   20.0f,    0.4f, false },
+        { "hammer_vel_ctc",  "Vel to Contact",  "Tone Bar", Unit::Ratio,      0.0f,     4.0f,    1.5f, false },
         { "noteoff_level",   "Note-Off Level",  "Tone Bar", Unit::Decibels, -100.0f,     0.0f,  -37.9f, false },
         // --- pickup ---------------------------------------------------------
         { "pickup_gain",     "Pickup Gain",     "Pickup", Unit::Decibels,    0.0f,    24.0f,   15.0f, false },
-        { "pickup_attack",   "Pickup Attack",   "Pickup", Unit::Decibels, -100.0f,    30.0f,  -10.0f, false },
+        { "pickup_attack",   "Pickup Attack",   "Pickup", Unit::Decibels, -100.0f,    30.0f,  -31.0f, false },
         { "pickup_lopass",   "Pickup Low-Pass", "Pickup", Unit::Hertz,     20.0f, 20000.0f, 2000.0f, true  },
         { "pickup_symmetry", "Pickup Symmetry", "Pickup", Unit::Decibels,    0.0f,    24.0f,    7.0f, true  },
         { "pickup_level",    "Pickup Level",    "Pickup", Unit::Decibels, -100.0f,     6.0f,    6.0f, false },
@@ -66,7 +68,10 @@ inline const std::vector<Spec>& table()
         { "trem_shape",      "Tremolo Shape",   "Tremolo", Unit::Count,      0.0f,   127.0f,    0.0f, false },
         { "trem_depth",      "Tremolo Depth",   "Tremolo", Unit::Decibels, -100.0f,     0.0f,   -9.0f, false },
         // --- output ---------------------------------------------------------
-        { "master",          "Master",          "Output", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },
+        // Master reaches above unity now.  MK1 inherited a 0 dB ceiling from the Pd
+        // patch's dbtorms convention, which was fine when the level was fixed; with
+        // the excitation rebalanced there has to be make-up available.
+        { "master",          "Master",          "Output", Unit::Decibels, -100.0f,    12.0f,    0.0f, false },
         // Polyphony is a CPU control as much as a musical one.  With the
         // sustain pedal down a Rhodes note rings for tens of seconds, so every
         // voice is legitimately busy and cost scales with this directly.
@@ -106,6 +111,7 @@ inline int decimalsFor(Unit u)
         case Unit::Hertz:    return 1;
         case Unit::Ratio:    return 2;
         case Unit::Q:        return 0;
+        case Unit::Millis:   return 2;
         case Unit::Count:    return 0;
         default:             return 0;
     }
@@ -116,6 +122,7 @@ inline juce::String suffixFor(Unit u)
     switch (u) {
         case Unit::Decibels: return " dB";
         case Unit::Hertz:    return " Hz";
+        case Unit::Millis:   return " ms";
         default:             return {};
     }
 }

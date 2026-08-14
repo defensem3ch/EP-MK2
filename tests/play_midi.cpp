@@ -102,13 +102,35 @@ int main(int argc, char** argv)
         rendered.copyFrom(0, pos, buf, 0, 0, n);
     }
 
+    // Note onsets are supposed to be abrupt -- the hammer contact is under a
+    // millisecond, so the attack moves fast enough to trip any slope detector.
+    // What matters is a discontinuity that is *not* explained by a note
+    // starting, which is what a retrigger click or a voice-steal step looks
+    // like.  Count those separately.
+    std::vector<double> onsets;
+    for (const auto& e : log)
+        if (e.what.startsWith("note on"))
+            onsets.push_back(e.t);
+
+    auto nearOnset = [&](double t) {
+        for (double o : onsets)
+            if (t >= o - 0.001 && t <= o + 0.030)
+                return true;
+        return false;
+    };
+
     const float* d = rendered.getReadPointer(0);
-    int clicks = 0; double worst = 0.0; double worstAt = 0.0;
+    int clicks = 0, unexplained = 0;
+    double worst = 0.0, worstAt = 0.0;
     for (int n = 2; n < totalSamples; ++n) {
         const double d1 = std::fabs(d[n] - d[n-1]), d2 = std::fabs(d[n-1] - d[n-2]);
         if (d1 > 0.02 && d1 > 8.0 * d2 + 1e-4) {
             ++clicks;
-            if (d1 > worst) { worst = d1; worstAt = n / sr; }
+            const double t = n / sr;
+            if (!nearOnset(t)) {
+                ++unexplained;
+                if (d1 > worst) { worst = d1; worstAt = t; }
+            }
         }
     }
 
@@ -119,12 +141,14 @@ int main(int argc, char** argv)
     printf("  cpu %.3f s for %.1f s audio -> %.1f%% of one core\n",
            cpu, length, 100.0 * cpu / length);
     printf("  peak level %.4f\n", rendered.getMagnitude(0, totalSamples));
-    printf("  discontinuities: %d%s\n", clicks,
-           clicks ? juce::String(" (worst " + juce::String(worst, 4)
+    printf("  slope events: %d, of which within a note attack: %d\n",
+           clicks, clicks - unexplained);
+    printf("  unexplained discontinuities: %d%s\n", unexplained,
+           unexplained ? juce::String(" (worst " + juce::String(worst, 4)
                                  + " at " + juce::String(worstAt, 2) + " s)").toRawUTF8() : "");
 
     // Show what was happening around each glitch.
-    if (clicks > 0) {
+    if (unexplained > 0) {
         printf("\n  glitches, with the MIDI around them:\n");
         int shown = 0;
         for (int n = 2; n < totalSamples && shown < 6; ++n) {
@@ -132,6 +156,8 @@ int main(int argc, char** argv)
             if (!(d1 > 0.02 && d1 > 8.0 * d2 + 1e-4))
                 continue;
             const double t = n / sr;
+            if (nearOnset(t))
+                continue;
             printf("    %8.3f s  jump %.4f  (level %.4f -> %.4f)\n",
                    t, d1, d[n-1], d[n]);
             for (const auto& e : log)

@@ -55,9 +55,21 @@ struct VoiceParams {
     float hammerLevelLin = 1.0e-5f;  // -100 dB
     float noteOffLevelLin = 0.0128f; // -37.9 dB
 
+    // Hammer contact time, in milliseconds and independent of pitch.  A Rhodes
+    // hammer is a neoprene tip on stiff steel and contact is well under a
+    // millisecond, which is what makes the strike broadband enough to drive the
+    // tine modes.  The model used to use a single cycle of the note's own
+    // period instead -- 9 ms at A2, 36 ms at A0 -- whose spectrum collapses
+    // above f0, leaving the modes 40-75 dB down.  See docs/ROADMAP.md 1.6.
+    float hammerContactMs = 0.4f;
+    // Octaves of shortening at full velocity: a harder strike has shorter
+    // contact as well as more force, and that is where "harder is brighter"
+    // physically comes from.
+    float hammerVelContact = 1.5f;
+
     // pickup
     float pickupGainLin = 5.62f;     // +15 dB
-    float pickupAttackLin = 0.316f;  // -10 dB
+    float pickupAttackLin = 0.0282f; // -31 dB
     float pickupLowpassHz = 2000.0f;
     // NOT the 7 shown on the panel.  Every "snd-" control in the patch goes
     // through [+ 100] -> [dbtorms] before it reaches a voice, so the panel's
@@ -138,13 +150,35 @@ public:
 
         configure(p, /*releasing=*/false);
 
-        // The excitation is a single cycle of raised cosine: a ramp from 1 to
-        // 0 over one period, mapped through cos() so it rises from and returns
-        // to zero.  The patch delays it 2 ms behind the note.
-        strikePeriodSamples = float(sampleRate / frequency);
+        // The excitation is a raised-cosine force pulse: a ramp from 1 to 0
+        // over the contact time, mapped through cos() so it rises from and
+        // returns to zero.  The patch delays it 2 ms behind the note.
+        //
+        // Its width is the hammer's contact time, not the note's period.  Tying
+        // it to 1/f0 made the excitation relatively *softer* towards the bass,
+        // which is backwards: a real hammer's contact time barely depends on
+        // pitch.
+        const float velNorm = v / 127.0f;
+        const float contactSec = p.hammerContactMs * 0.001f
+                               * std::pow(2.0f, -p.hammerVelContact * velNorm);
+        strikeContactSamples = std::max(2.0f, float(sampleRate * contactSec));
+        // A hammer imparts *momentum*, so what velocity sets is the area of the
+        // pulse, not its height: shortening contact raises the peak force for
+        // the same strike.  Without this, the contact-time control would double
+        // as a volume control, and the whole instrument would lose its low end
+        // the moment contact was shortened.
+        //
+        // The reference is the width the old pitch-tied pulse had at A3, so the
+        // default contact time leaves the instrument's output level roughly
+        // where MK1 had it and this is a change of timbre rather than of level.
+        strikeAmp = velocityAmp
+                  * (kReferenceContactSec / std::max(1.0e-6f, contactSec));
+        // The damper landing at note-off is a different, much softer contact,
+        // so it keeps the period-width pulse it always had.
+        releasePeriodSamples = float(sampleRate / frequency);
         strikeDelay = int(0.002 * sampleRate);
         strikeRamp = 1.0f;
-        strikeInc = strikePeriodSamples > 0.0f ? -1.0f / strikePeriodSamples : -1.0f;
+        strikeInc = -1.0f / strikeContactSamples;
 
         if (restrike) {
             // The hammer has struck a tine that is still vibrating.  Keep every
@@ -184,7 +218,7 @@ public:
         // the damper landing on the tine.
         configure(p, /*releasing=*/true);
         noteOffRamp = 1.0f;
-        noteOffInc = strikePeriodSamples > 0.0f ? -1.0f / strikePeriodSamples : -1.0f;
+        noteOffInc = releasePeriodSamples > 0.0f ? -1.0f / releasePeriodSamples : -1.0f;
     }
 
     // Called when the pedal lifts while this voice is no longer held.
@@ -215,7 +249,7 @@ public:
             strikeRamp += strikeInc;
             if (strikeRamp < 0.0f) strikeRamp = 0.0f;
         }
-        strike *= velocityAmp;
+        strike *= strikeAmp;
 
         float release = 0.0f;
         if (noteOffRamp > 0.0f) {
@@ -225,7 +259,7 @@ public:
         }
 
         // --- tone bar ------------------------------------------------------
-        const float toneRaw = toneBar.process(strike + release) * 0.707946f;
+        const float toneRaw = toneBar.process(strike + release) * 0.707946f * kResonatorTrim;
 
         // --- tine ----------------------------------------------------------
         // Modes above Nyquist are skipped rather than run: see configure().
@@ -234,6 +268,7 @@ public:
         if (mode1Active) tineRaw += tine1.process(tineIn);
         if (mode2Active) tineRaw += tine2.process(tineIn) * p.tineMode2LevelLin;
         if (mode3Active) tineRaw += tine3.process(tineIn) * p.tineMode3LevelLin;
+        tineRaw *= kResonatorTrim;
 
         // --- pickup --------------------------------------------------------
         const float pickupIn = pickupLowpass.process(strike * p.pickupAttackLin + toneRaw)
@@ -330,6 +365,26 @@ private:
     // numerically poor and inaudible.
     static constexpr float kNyquistFraction = 0.45f;
 
+    // The impulse a unit-velocity strike delivers, expressed as the width of
+    // an equivalent unit-height pulse.  Chosen so the instrument sits at a
+    // sensible level with the tine modes now carrying real energy; see the
+    // rebalance sweep in tests/probe_modes.cpp.
+#ifndef EPMK2_REF_CONTACT
+#define EPMK2_REF_CONTACT (1.0f / 220.0f)
+#endif
+    static constexpr float kReferenceContactSec = EPMK2_REF_CONTACT;
+
+    // Resonators are normalised to a unit impulse response, which leaves them
+    // ringing far above unity for a real strike.  One constant brings the whole
+    // voice back to the level MK1 ran at -- and because it is applied to the
+    // resonator outputs rather than to the output as a whole, it also fixes how
+    // hard the pickup's tanh is driven.  Applied at the output instead, the
+    // level would be right while the pickup sat permanently saturated.
+#ifndef EPMK2_RES_TRIM
+#define EPMK2_RES_TRIM 0.0022f
+#endif
+    static constexpr float kResonatorTrim = EPMK2_RES_TRIM;
+
     // -80 dBFS.  Below this a voice cannot be heard even solo, and holding on
     // any longer just burns CPU: with the pedal down the tone bar's Q of 1642
     // means a note takes the better part of a minute to reach -100 dB.
@@ -346,12 +401,14 @@ private:
     float  frequency = 440.0f;
     float  note = 69.0f;
     float  velocityAmp = 1.0f;
+    float  strikeAmp = 1.0f;
 
     Biquad toneBar, tine1, tine2, tine3, tineHighpass, pickupLowpass, bodyHighpass;
     bool mode1Active = true, mode2Active = true, mode3Active = false;
     OnePole keytrack1, keytrack2;
 
-    float strikeRamp = 0.0f, strikeInc = 0.0f, strikePeriodSamples = 0.0f;
+    float strikeRamp = 0.0f, strikeInc = 0.0f;
+    float strikeContactSamples = 0.0f, releasePeriodSamples = 0.0f;
     float noteOffRamp = 0.0f, noteOffInc = 0.0f;
     int   strikeDelay = 0;
 

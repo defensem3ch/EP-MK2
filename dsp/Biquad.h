@@ -60,9 +60,28 @@ inline BiquadCoeffs designBandpass(double freqHz, double q, double sampleRate) n
     const double cosw0 = std::cos(w0);
     const double alpha = sinw0 / (2.0 * q);
 
-    const double b0 =  sinw0 * 0.5;
+    // Unity peak gain, not constant skirt gain.  The Pd original used
+    // b0 = sin(w0)/2, whose gain at resonance is Q -- so the tone bar ran at
+    // +64 dB and the tine modes at +47 dB, and the level of every resonator was
+    // set by its decay time.  That was survivable only because the old
+    // excitation had almost no energy at the mode frequencies; with a real
+    // broadband strike it clips instantly.  It also makes a Q that varies
+    // across the keyboard impossible, since changing Q would swing the level
+    // with it (roadmap 1.3).
+    //
+    // The normalisation that suits an impulse-driven resonator is a unit
+    // *impulse response*, b0 = 1: struck by a force pulse, the mode rings at an
+    // amplitude set by the strike and its own level control, whatever its Q or
+    // its frequency.  Unit peak gain (b0 = alpha) does not do this -- its
+    // impulse response scales with sin(w0)/2Q, so the balance between modes
+    // would still move with pitch and decay time.
+    //
+    // Note the steady-state gain at resonance is then 1/alpha, which is large.
+    // That is harmless for impulsive excitation but will matter if a resonator
+    // is ever driven continuously -- sympathetic coupling, roadmap 2.2.
+    const double b0 =  1.0;
     const double b1 =  0.0;
-    const double b2 = -sinw0 * 0.5;
+    const double b2 = -1.0;
     const double a0 =  1.0 + alpha;
     const double a1 = -2.0 * cosw0;
     const double a2 =  1.0 - alpha;

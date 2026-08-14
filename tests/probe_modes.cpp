@@ -69,6 +69,29 @@ int main()
 
     report("defaults", p);
 
+    // The engine ends in tanh(), so a peak of 1.0 tells us nothing except that
+    // it saturated.  Render with master far down and scale back up to see the
+    // level actually arriving at the limiter, and which stage produced it.
+    {
+        auto peakPre = [&](const char* label, epmk2::EngineParams q) {
+            q.masterLin = 1.0e-4f;
+            const auto x = render(q, note, sr, n);
+            double pk = 0.0;
+            for (float v : x) pk = std::max(pk, (double)std::fabs(v));
+            printf("  %-30s pre-limiter peak %10.2f (%.1f dB)\n",
+                   label, pk * 1.0e4, dB(pk * 1.0e4));
+        };
+        printf("\n");
+        peakPre("everything", p);
+        { auto q = p; q.voice.tineLevelLin   = 1.0e-6f; peakPre("without tine sum", q); }
+        { auto q = p; q.voice.toneLevelLin   = 1.0e-6f; peakPre("without tone bar sum", q); }
+        { auto q = p; q.voice.pickupLevelLin = 1.0e-6f; q.voice.buzzLevelLin = 1.0e-6f;
+                                                        peakPre("without pickup out", q); }
+        { auto q = p; q.voice.hammerLevelLin = 1.0e-9f; peakPre("without hammer direct", q); }
+        { auto q = p; q.voice.pickupAttackLin = 1.0e-9f; peakPre("without pickup attack", q); }
+        printf("\n");
+    }
+
     { auto q = p; q.voice.tineLevelLin = 1.0e-5f; report("whole tine path off", q); }
     { auto q = p; q.voice.tineMode3LevelLin = 1.0e-5f; report("mode 3 off", q); }
     { auto q = p; q.voice.tineMode3LevelLin = 1.0f;    report("mode 3 at 0 dB", q); }
@@ -90,6 +113,52 @@ int main()
                       (double)p.voice.tineRatio2, (double)p.voice.tineRatio3 })
         printf("    at %5.1f x f0 (%8.1f Hz): %7.1f dB\n",
                r, f0 * r, dB(goertzel(strike, f0 * r, sr)));
+
+    // --- across the keyboard ----------------------------------------------
+    // The trim is one constant, but resonator behaviour varies with pitch, so
+    // check the whole range rather than trusting one note.
+    printf("\n  across the keyboard (velocity 110):\n");
+    printf("    %-6s %9s %8s %10s %9s %9s\n", "note", "f0 Hz", "peak", "pre-limit", "f0 dB", "m1 dB");
+    for (int nt : { 21, 33, 45, 57, 69, 81, 93, 105 }) {
+        const double fn = p.baseFreq * std::pow(2.0, (nt - p.baseNote) / 12.0);
+        const auto x = render(p, nt, sr, n);
+        double pk = 0.0;
+        for (float v : x) pk = std::max(pk, (double)std::fabs(v));
+        auto q = p; q.masterLin = 1.0e-4f;
+        const auto xp = render(q, nt, sr, n);
+        double pre = 0.0;
+        for (float v : xp) pre = std::max(pre, (double)std::fabs(v));
+        printf("    %-6d %9.1f %8.4f %10.2f %9.1f %9.1f\n", nt, fn, pk, pre * 1.0e4,
+               dB(goertzel(x, fn, sr)), dB(goertzel(x, fn * p.voice.tineRatio1, sr)));
+    }
+
+    // --- rebalancing after the excitation change --------------------------
+    // The strike now carries ~11x the impulse it did, so every gain calibrated
+    // against the old weak pulse is too hot.  Sweep the two that matter and
+    // look for a peak near MK1's 0.63 with the modes still ranked under f0.
+    printf("\n  rebalance sweep (pickup attack / pickup gain):\n");
+    printf("    %-10s %-10s %8s %9s %9s %9s %9s\n",
+           "attack dB", "gain dB", "peak", "f0", "m1", "m2", "m3");
+    for (double atkDb : { -10.0, -21.0, -31.0, -41.0 }) {
+        for (double gainDb : { 15.0, 9.0 }) {
+            auto q = p;
+            q.voice.pickupAttackLin = (float)std::pow(10.0, atkDb / 20.0);
+            q.voice.pickupGainLin   = (float)std::pow(10.0, gainDb / 20.0);
+            const auto x = render(q, note, sr, n);
+            double peak = 0.0;
+            for (float v : x) peak = std::max(peak, (double)std::fabs(v));
+            auto q2 = q; q2.masterLin = 1.0e-4f;
+            const auto xp = render(q2, note, sr, n);
+            double pre = 0.0;
+            for (float v : xp) pre = std::max(pre, (double)std::fabs(v));
+            printf("    %-10.0f %-10.0f %8.4f pre %6.2f %9.1f %9.1f %9.1f %9.1f\n",
+                   atkDb, gainDb, peak, pre * 1.0e4,
+                   dB(goertzel(x, f0, sr)),
+                   dB(goertzel(x, f0 * q.voice.tineRatio1, sr)),
+                   dB(goertzel(x, f0 * q.voice.tineRatio2, sr)),
+                   dB(goertzel(x, f0 * q.voice.tineRatio3, sr)));
+        }
+    }
 
     return 0;
 }

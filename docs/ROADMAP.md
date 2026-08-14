@@ -28,56 +28,94 @@ note 108 and audible at note 45.
 **But adding mode 3 changed almost nothing audible, and that is the finding.**
 See 1.6 — the excitation cannot reach these modes in the first place.
 
-### 1.6 The hammer excitation is far too narrowband — **new, and now the priority**
+### 1.6 The hammer excitation was far too narrowband — **done**
 
-Measured with `tests/probe_modes.cpp`, at A2 (110 Hz):
+The excitation was a single raised-cosine cycle at the note's own period — 9 ms
+at A2, 36 ms at A0. Its spectrum collapses above f0, so the tine modes were
+driven 65–71 dB below the fundamental and arrived 40–75 dB down in the output.
 
-| | excitation reaching it | level in the output |
+**Now:** a raised-cosine force pulse whose width is the hammer's **contact
+time** in milliseconds, independent of pitch (`Hammer Contact`, default 0.4 ms),
+with velocity shortening contact as well as raising force (`Vel to Contact`,
+default 1.5 octaves at full velocity) — which is where "harder is brighter"
+physically comes from. Amplitude is normalised on **impulse**, not peak: a
+hammer imparts momentum, so a shorter contact means a higher peak force for the
+same strike, and the contact control changes timbre rather than volume. The
+damper thump at note-off keeps its old period-width pulse; that contact really
+is soft and slow.
+
+Result at A2, against MK1:
+
+| | MK1 | MK2 |
 | --- | --- | --- |
-| fundamental | −54 dB | −14.4 dB |
-| mode 1 (7.1x, 781 Hz) | −91 dB | −54.7 dB |
-| mode 2 (20.4x, 2244 Hz) | −119 dB | −79.9 dB |
-| mode 3 (39.7x, 4367 Hz) | −125 dB | −89.9 dB |
+| fundamental | −14.4 dB | −18.9 dB |
+| mode 1 (781 Hz) | −54.7 (−40 rel) | −41.6 (**−22.7 rel**) |
+| mode 2 (2244 Hz) | −79.9 (−65 rel) | −51.7 (**−32 rel**) |
+| mode 3 (4367 Hz) | −89.9 (−75 rel) | −60.5 (**−41 rel**) |
 
-The excitation is a **single raised-cosine cycle at the note's own period**. Its
-spectrum collapses above f0, so mode 2 is driven 65 dB below the fundamental and
-mode 3 by 71 dB. The tine modes — the thing that makes a Rhodes sound like a
-Rhodes — arrive 40 to 75 dB down and are effectively inaudible.
+The tine is 17–18 dB more present through the bass and mid-range.
 
-This explains a great deal about the model as inherited:
+#### What it dragged in: resonator normalisation
 
-* Why the instrument needs +15 dB of `pickup_gain` into a waveshaper to sound
-  bright at all. **The harmonics are coming from the nonlinearity, not from the
-  tine.** That is backwards from the physics.
-* Why `pickup_symmetry` is far and away the strongest timbral control, and why
-  getting its units wrong turned the instrument into a Wurlitzer.
-* Why adding measured mode ratios has so little effect: the ratios are right,
-  but nothing is driving them.
+The Pd original's `designBandpass` used RBJ **constant skirt gain**, whose gain
+at resonance is Q. The tone bar therefore ran at +64 dB and the tine modes at
++47 dB, and **every resonator's level was set by its decay time**. That was
+survivable only because the old excitation had almost no energy at the mode
+frequencies; a real broadband strike clips instantly, and no amount of gain
+staging fixes it because one strike gain cannot restore a balance that came
+from two different Q values.
 
-**The physical problem.** A Rhodes hammer is a small neoprene tip striking a
-stiff steel tine; contact is short, well under a millisecond, which is what
-makes the strike broadband enough to excite modes into the kHz. Here the pulse
-lasts one whole period — 9 ms at A2, and **36 ms at A0**, which is not a hammer
-strike at all. Worse, tying the width to `1/f0` means the excitation gets
-*relatively* softer as you go down the keyboard, which is the opposite of a real
-instrument where contact time is roughly pitch-independent.
+Resonators are now normalised to a **unit impulse response** (`b0 = 1`), so a
+struck mode rings at an amplitude set by the strike and its own level control,
+whatever its Q or frequency. This was not optional and it is not cosmetic:
 
-**Implementation.** Decouple excitation width from pitch: a contact-time
-parameter in milliseconds, defaulting to something near 0.5–1 ms, with the
-raised-cosine shape kept. Velocity should shorten contact as well as raise
-amplitude — that is where a real instrument's "harder strike is brighter"
-behaviour comes from, and it would make the velocity layers in the benchmark
-fittable.
+* It is what makes **1.3 possible at all**. With the old normalisation, a Q
+  varying 731→2175 across the keyboard would have swung the level ~9.5 dB with
+  it, purely as an artefact.
+* It makes the level controls mean what they say, which the sample fitting in
+  Part 3 needs.
+* Caveat: steady-state gain at resonance is now `1/alpha`, which is large.
+  Harmless for impulsive excitation, but it **will matter for 2.2**, where
+  resonators are driven continuously through a coupling bus.
 
-**Expect this to change the sound substantially**, and to need `pickup_gain`
-and the tine send rebalanced afterwards — probably downward, since brightness
-will start coming from the right place. The six factory presets will need
-revisiting. That is a good sign, not a bad one, but it should not be done
-casually, and the parity story with MK1 ends here by design.
+Two calibration constants follow from it, both in `Voice`:
+`kReferenceContactSec` (the impulse a unit-velocity strike delivers) and
+`kResonatorTrim` (bringing unity-impulse resonators back to a sane level). The
+trim is applied to the resonator *outputs* rather than the voice output on
+purpose — applied at the end, the level would be right while the pickup's tanh
+sat permanently saturated.
 
-**Verify:** re-run `tests/probe_modes.cpp` and check the modes come up out of
-the noise; confirm the velocity→brightness curve against the benchmark's 12
-velocity layers.
+#### Rebalanced defaults
+
+* `pickup_attack` −10 → **−31 dB**. Exactly compensates the 11.4× larger
+  strike. This control existed to fake the attack transient the missing tine
+  modes should have provided; now that they work, it is a trim rather than the
+  main event.
+* `master` ceiling 0 → **+12 dB**. MK1 inherited a 0 dB ceiling from the Pd
+  patch's `dbtorms` convention; with the excitation rebalanced there has to be
+  make-up available.
+
+#### Verified
+
+* Modes measurably present: `tests/probe_modes.cpp`.
+* **0 unexplained discontinuities** on `ep_noodling.MID`. The raw slope
+  detector now fires 233 times, but all 233 are inside note attacks — a 0.4 ms
+  contact moves ~0.026 per sample at 48 kHz, so a detector tuned to MK1's 9 ms
+  attacks flags the attack itself. `play_midi` now separates the two.
+* CPU unchanged at 0.7–0.8% of a core; peak voices 6.
+
+#### Still open
+
+* **Treble tilt.** Output falls ~20 dB from note 21 to 105 (MK1 fell 16 dB, so
+  this is a pre-existing characteristic made slightly worse, not a new one). The
+  real cause is that a magnetic pickup senses dΦ/dt and so has an inherent
+  +6 dB/octave tilt that this model does not have — which **1.4 will supply**.
+  Worth resisting the temptation to paper over it with a gain curve first.
+* The top octave loses its inharmonic content, because a 0.4 ms contact cannot
+  excite 7.1× of 1760 Hz. Physically reasonable, but worth checking against the
+  benchmark.
+* **The six factory presets were tuned against the old excitation** and want
+  revisiting.
 
 ### 1.2 Sub-fundamental (0.58–0.83)
 
