@@ -71,6 +71,7 @@ bool apply(const juce::AudioProcessorValueTreeState& tree,
         else if (id == "sustain")         p.voice.sustainPedal = v > 0.5f;
         // Tremolo
         else if (id == "trem_on")         p.tremoloOn = v > 0.5f;
+        else if (id == "trem_stereo")     p.tremoloStereo = v > 0.5f;
         else if (id == "trem_rate")       p.tremoloRateHz = v;
         else if (id == "trem_shape")      p.tremoloShape = v;
         else if (id == "trem_depth")      p.tremoloDepthLin = lin;

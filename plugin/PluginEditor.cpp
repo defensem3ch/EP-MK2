@@ -331,14 +331,18 @@ EpMk2Editor::EpMk2Editor(EpMk2Processor& p)
     const int maxW = kDesignWidth * 2,      maxH = designHeight * 2;
     setResizeLimits(minW, minH, maxW, maxH);
 
-    // Reopen at the size it was left at.  Clamped to the current limits rather
-    // than trusted, since the design size can change between versions and a
-    // stale value would otherwise reopen the window at a size this build does
-    // not allow.
-    if (saved.x >= minW && saved.x <= maxW && saved.y >= minH && saved.y <= maxH)
-        setSize(saved.x, saved.y);
-    else
-        setSize(kDesignWidth, designHeight);
+    // Reopen at the size it was left at -- but restore the *width* and derive
+    // the height from this build's design ratio, rather than restoring both.
+    //
+    // The panel's aspect is fixed by the constrainer, so height was never an
+    // independent quantity; and the design size changes whenever the layout
+    // does, which has happened with most releases.  Storing both meant a
+    // stored height from an older layout no longer matched the current ratio,
+    // failed the range check, and dropped the window back to the default size
+    // on every update.  Width alone survives a layout change.
+    const int wanted = saved.x > 0 ? juce::jlimit(minW, maxW, saved.x) : kDesignWidth;
+    setSize(wanted, juce::roundToInt(wanted * (double) designHeight
+                                            / (double) kDesignWidth));
     startTimerHz(10);
 }
 

@@ -141,6 +141,8 @@ inline const std::vector<Spec>& table()
           "Feeds the hammer blow straight into the pickup, which no real pickup sees. Off by default: it faked an attack the tine modes now produce properly, and once differentiated it is audibly a click." },
 
         // --- tremolo --------------------------------------------------------
+        { "trem_stereo",     "Stereo",          "Tremolo", Unit::Toggle,     0.0f,     1.0f,    1.0f, false,
+          "Swings the two channels in antiphase, as a suitcase does by panning between its two amplifiers. Off moves both together, which is the mono behaviour." },
         { "trem_on",         "Tremolo",         "Tremolo", Unit::Toggle,     0.0f,     1.0f,    0.0f, false,
           "Switches the tremolo: amplitude modulation, the effect a Rhodes suitcase has. Not vibrato, there is no pitch movement." },
         { "trem_depth",      "Tremolo Depth",   "Tremolo", Unit::Decibels, -100.0f,     0.0f,   -9.0f, false,

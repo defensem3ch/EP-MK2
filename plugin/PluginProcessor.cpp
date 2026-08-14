@@ -179,22 +179,23 @@ void EpMk2Processor::processBlock(juce::AudioBuffer<float>& buffer,
     // Render between MIDI events rather than at block boundaries, so note
     // timing is sample-accurate.  The Heavy build could not do this: hv.vline~
     // quantised every strike to the start of a block.
+    auto renderTo = [&](int from, int to) {
+        for (int i = from; i < to; ++i) {
+            float l = 0.0f, r = 0.0f;
+            engine.render(params, l, r);
+            left[i] = l;
+            if (right != nullptr) right[i] = r;
+        }
+    };
+
     int pos = 0;
     for (const auto meta : midi) {
         const int eventPos = juce::jlimit(0, numSamples, meta.samplePosition);
-        for (; pos < eventPos; ++pos) {
-            const float s = engine.process(params);
-            left[pos] = s;
-            if (right != nullptr) right[pos] = s;
-        }
+        renderTo(pos, eventPos);
+        pos = eventPos;
         handleMidi(meta.getMessage());
     }
-
-    for (; pos < numSamples; ++pos) {
-        const float s = engine.process(params);
-        left[pos] = s;
-        if (right != nullptr) right[pos] = s;
-    }
+    renderTo(pos, numSamples);
 
     midi.clear();
 }

@@ -801,6 +801,98 @@ int main()
         check(spread < 0.5f, "level does not depend on the sample rate", sd);
     }
 
+    // ---- stereo tremolo ---------------------------------------------------
+    // The voices are mono -- one tine, one pickup -- so the channels separate
+    // only at the tremolo.  Which means this is the first thing in the
+    // instrument that can produce a stereo image at all, and worth checking it
+    // really does rather than assuming.
+    {
+        auto renderPair = [&](bool tremOn, bool stereo,
+                              std::vector<float>& l, std::vector<float>& r) {
+            auto set = [&](const char* id, float v) {
+                if (auto* q = proc.getState().getParameter(id))
+                    q->setValueNotifyingHost(q->convertTo0to1(v));
+            };
+            set("trem_on", tremOn ? 1.0f : 0.0f);
+            set("trem_stereo", stereo ? 1.0f : 0.0f);
+            set("trem_rate", 6.0f);
+            set("trem_depth", -3.0f);
+            proc.prepareToPlay(sr, block);
+
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+
+            juce::MidiBuffer m;
+            m.addEvent(juce::MidiMessage::noteOn(1, 45, (juce::uint8)110), 0);
+            juce::AudioBuffer<float> b(2, block);
+            l.clear(); r.clear();
+            for (int i = 0; i < blocksPerSecond; ++i) {
+                b.clear();
+                proc.processBlock(b, m);
+                m.clear();
+                for (int n = 0; n < block; ++n) {
+                    l.push_back(b.getSample(0, n));
+                    r.push_back(b.getSample(1, n));
+                }
+            }
+            renderPeak(proc, panic, 1, block);
+        };
+
+        auto channelDifference = [](const std::vector<float>& l,
+                                    const std::vector<float>& r) {
+            double d = 0.0, e = 0.0;
+            for (size_t i = 0; i < l.size(); ++i) {
+                const double x = double(l[i]) - double(r[i]);
+                d += x * x;
+                e += double(l[i]) * double(l[i]);
+            }
+            return e > 0.0 ? std::sqrt(d / e) : 0.0;
+        };
+
+        std::vector<float> l, r;
+
+        renderPair(false, true, l, r);
+        check(l == r, "with the tremolo off, both channels are identical");
+
+        renderPair(true, false, l, r);
+        check(l == r, "mono tremolo moves both channels together");
+
+        renderPair(true, true, l, r);
+        const double spread = channelDifference(l, r);
+        char sd[80];
+        snprintf(sd, sizeof sd, "  (%.1f%% apart)", spread * 100.0);
+        check(spread > 0.05, "stereo tremolo swings the channels apart", sd);
+
+        // Antiphase, not just different: the two should move oppositely, so
+        // their sum stays far steadier than either channel alone.
+        std::vector<float> sum(l.size()), one(l.size());
+        for (size_t i = 0; i < l.size(); ++i) {
+            sum[i] = 0.5f * (l[i] + r[i]);
+            one[i] = l[i];
+        }
+        auto swing = [&](const std::vector<float>& v) {
+            // peak level per 50 ms block, max against min
+            double lo = 1e9, hi = 0.0;
+            const size_t w = size_t(sr * 0.05);
+            for (size_t i = 0; i + w < v.size(); i += w) {
+                double pk = 0.0;
+                for (size_t k = i; k < i + w; ++k) pk = std::max(pk, (double)std::fabs(v[k]));
+                if (pk > 0) { lo = std::min(lo, pk); hi = std::max(hi, pk); }
+            }
+            return hi > 0 ? 20.0 * std::log10(hi / lo) : 0.0;
+        };
+        const double swingOne = swing(one), swingSum = swing(sum);
+        char an[96];
+        snprintf(an, sizeof an, "  (one channel %.1f dB, the sum %.1f dB)",
+                 swingOne, swingSum);
+        check(swingSum < swingOne, "the channels move in antiphase", an);
+
+        if (auto* q = proc.getState().getParameter("trem_on"))
+            q->setValueNotifyingHost(0.0f);
+        proc.prepareToPlay(sr, block);
+    }
+
     // ---- factory presets -------------------------------------------------
     // A preset that loads but sounds like the one before it is not a preset,
     // so each is measured for level and brightness rather than merely checked
@@ -951,7 +1043,23 @@ int main()
                   "a saved session reopens at its own size", d);
         }
 
-        // 2. A brand new instance, with no state at all, opens at the size the
+        // 2. A stored size from an older layout still restores.  The design
+        //    size changes whenever the panel does, so a stored height from a
+        //    previous build will not match the current aspect ratio -- and
+        //    used to be rejected outright, dropping every update back to the
+        //    default size.  Width is what carries over.
+        {
+            proc.saveEditorSize(w, h * 3 / 2);       // as if the layout had changed
+            std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
+            char d[96];
+            snprintf(d, sizeof d, "  (asked %d x %d, got %d x %d)",
+                     w, h * 3 / 2, ed->getWidth(), ed->getHeight());
+            check(std::abs(ed->getWidth() - w) <= 2,
+                  "a size stored by an older layout still restores", d);
+            proc.saveEditorSize(w, h);
+        }
+
+        // 3. A brand new instance, with no state at all, opens at the size the
         //    last one was left -- this is the case that was broken.
         {
             EpMk2Processor fresh;

@@ -609,18 +609,27 @@ no need for `TooltipWindow` and its timing behaviour.
 Worth doing before anyone else is asked to use this, because the controls are
 not self-explanatory and the physical model is the whole point of them.
 
-### 4.4 Mono / stereo tremolo
+### 4.4 Mono / stereo tremolo — **done**
 
-The tremolo is currently one LFO on a mono sum -- both channels move together,
-which is the mono behaviour. A Rhodes suitcase pans between the two amplifiers
-rather than simply ducking, and that stereo movement is a large part of what
-the effect is *for*.
+`Stereo` in the Tremolo section, on by default. Stereo swings the channels in
+antiphase, which is what a suitcase does -- it pans between two amplifiers
+rather than simply ducking, and that movement is most of what the effect is
+*for*. Off moves both together, the mono behaviour.
 
-A switch, then, with stereo modulating the channels in antiphase. Worth noting
-the plugin is mono internally today: `processBlock` renders once and copies to
-both channels, so this is the first thing that will genuinely need a stereo
-path, and 2.2 (sympathetic resonance) and 4.2 (vibrato) would all benefit from
-that existing. Whichever lands first should build it properly.
+Measured: one channel swings 10.1 dB while their **sum** swings only 4.4 dB,
+which is the test that it is really antiphase rather than merely two different
+signals. With the tremolo off, or in mono, the channels are bit-identical.
+
+**This built the stereo path.** The instrument was mono throughout --
+`processBlock` rendered once and copied to both channels -- so this is the
+first feature that needed two. The voices are still mono, and correctly so: one
+tine, one pickup. The channels separate at the tremolo and everything after it
+is per channel, because the DC blocker is stateful and the limiter is
+nonlinear, and sharing either would couple the two sides back together.
+
+`Engine::render(p, left, right)` is the entry point now; `process()` remains as
+a mono convenience for the offline probes in `tests/`. **2.2** (sympathetic
+resonance) and **4.2** (vibrato) both wanted this to exist and can now use it.
 
 ### 4.5 Scale Workshop / .scl tunings
 

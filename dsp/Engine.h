@@ -30,6 +30,10 @@ struct EngineParams {
     float tremoloRateHz = 3.0f;
     float tremoloShape = 0.0f;       // 0..127, sine -> triangle
     float tremoloDepthLin = 0.355f;  // -9 dB
+    // Stereo swings the channels in antiphase, which is what a suitcase does
+    // -- it pans between two amplifiers rather than simply ducking.  Mono
+    // moves both together.
+    bool  tremoloStereo = false;
 
     float masterLin = 1.0f;
     int   polyphony = 32;
@@ -61,7 +65,7 @@ public:
             voices[i].prepare(sr);
         tremoloPhase = 0.0f;
         rngState = 0x9E3779B9u;
-        dcBlockX1 = dcBlockY1 = 0.0f;
+        dcBlockX1 = dcBlockY1 = dcBlockX1R = dcBlockY1R = 0.0f;
         dcBlockCoeff = float(1.0 - 2.0 * M_PI * 5.0 / sr);   // hip~ 5
     }
 
@@ -116,10 +120,15 @@ public:
     {
         for (int i = 0; i < voiceCount; ++i)
             voices[i].reset();
-        dcBlockX1 = dcBlockY1 = 0.0f;
+        dcBlockX1 = dcBlockY1 = dcBlockX1R = dcBlockY1R = 0.0f;
     }
 
-    inline float process(const EngineParams& p) noexcept
+    // The voices are mono -- one tine, one pickup -- so the instrument is
+    // summed once and the channels only separate afterwards, in the tremolo.
+    // Everything downstream of that has to be per channel, though: the DC
+    // blocker is stateful and the limiter is nonlinear, so sharing either
+    // would couple the two sides back together.
+    inline void render(const EngineParams& p, float& left, float& right) noexcept
     {
         shaper.setGeometry(p.voice.pickupDistance, p.voice.pickupOffset);
         setVoiceCount(p.polyphony);
@@ -129,19 +138,26 @@ public:
             if (voices[i].isActive())
                 sum += voices[i].process(p.voice, shaper);
 
-        sum *= 0.5f;
+        sum *= 0.5f * p.masterLin;
 
-        if (p.tremoloOn)
-            sum *= tremolo(p);
+        float l = sum, r = sum;
+        if (p.tremoloOn) {
+            float gl = 1.0f, gr = 1.0f;
+            tremoloGains(p, gl, gr);
+            l *= gl;
+            r *= gr;
+        }
 
-        sum *= p.masterLin;
+        left  = std::tanh(dcBlock(l, dcBlockX1, dcBlockY1));
+        right = std::tanh(dcBlock(r, dcBlockX1R, dcBlockY1R));
+    }
 
-        // hip~ 5, then Pd's tanh~ as a soft limiter.
-        const float hp = sum - dcBlockX1 + dcBlockCoeff * dcBlockY1;
-        dcBlockX1 = sum;
-        dcBlockY1 = hp;
-
-        return std::tanh(hp);
+    // Mono convenience, for the offline probes in tests/.
+    inline float process(const EngineParams& p) noexcept
+    {
+        float l = 0.0f, r = 0.0f;
+        render(p, l, r);
+        return l;
     }
 
     int activeVoices() const noexcept
@@ -235,8 +251,16 @@ private:
         return sv;
     }
 
+    inline float dcBlock(float x, float& x1, float& y1) noexcept
+    {
+        const float y = x - x1 + dcBlockCoeff * y1;   // hip~ 5
+        x1 = x;
+        y1 = y;
+        return y;
+    }
+
     // Blend of a sine and a triangle, matching the patch's shape control.
-    inline float tremolo(const EngineParams& p) noexcept
+    inline void tremoloGains(const EngineParams& p, float& gl, float& gr) noexcept
     {
         tremoloPhase += float(p.tremoloRateHz / sampleRate);
         if (tremoloPhase >= 1.0f) tremoloPhase -= 1.0f;
@@ -246,7 +270,10 @@ private:
         const float blend = std::min(1.0f, std::max(0.0f, p.tremoloShape / 127.0f));
         const float lfo = sine * (1.0f - blend) + tri * blend;
 
-        return 1.0f - p.tremoloDepthLin * (1.0f - lfo);
+        gl = 1.0f - p.tremoloDepthLin * (1.0f - lfo);
+        // Antiphase: loud where the left is quiet.  Same depth, opposite swing,
+        // so the sum of the two stays put and the movement is all in the image.
+        gr = p.tremoloStereo ? 1.0f - p.tremoloDepthLin * lfo : gl;
     }
 
     double sampleRate = 48000.0;
@@ -258,7 +285,9 @@ private:
 
     float tremoloPhase = 0.0f;
     uint32_t rngState = 0x9E3779B9u;
-    float dcBlockX1 = 0.0f, dcBlockY1 = 0.0f, dcBlockCoeff = 0.999f;
+    float dcBlockX1 = 0.0f, dcBlockY1 = 0.0f;
+    float dcBlockX1R = 0.0f, dcBlockY1R = 0.0f;
+    float dcBlockCoeff = 0.999f;
 };
 
 } // namespace epmk2
