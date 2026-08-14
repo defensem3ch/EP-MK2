@@ -40,6 +40,7 @@ bool apply(const juce::AudioProcessorValueTreeState& tree,
         else if (id == "tine_mode2_lvl")  p.voice.tineMode2LevelLin = lin;
         else if (id == "tine_mode3_lvl")  p.voice.tineMode3LevelLin = lin;
         else if (id == "tine_mode_damp")  p.voice.tineModeDamping = v;
+        else if (id == "key_var")         p.voice.keyVariation = v;
         else if (id == "tine_hipass")     p.voice.tineHighpassHz = v;
         else if (id == "tine_decay")      p.voice.tineQ = v;
         else if (id == "tine_level")      p.voice.tineLevelLin = lin;
@@ -56,6 +57,7 @@ bool apply(const juce::AudioProcessorValueTreeState& tree,
         else if (id == "hammer_contact")  p.voice.hammerContactMs = v;
         else if (id == "hammer_vel_ctc")  p.voice.hammerVelContact = v;
         else if (id == "bass_tilt")       p.voice.tineMassTracking = v;
+        else if (id == "strike_var")      p.voice.strikeVariation = v;
         // Pickup
         else if (id == "pickup_gain")     p.voice.pickupGainLin = lin;
         else if (id == "pickup_attack")   p.voice.pickupAttackLin = lin;

@@ -440,24 +440,43 @@ Rhodes). Two hazards:
 a low note, and confirm energy appears at the held notes' frequencies. Then
 re-check CPU at 32 sounding voices with the pedal down.
 
-### 2.3 Attack variation, including the unexpected one
+### 2.3 Variation — **done**, and it turned out to be two things
 
-**The observation:** the attack is never static; even a heavy strike sometimes
-lands differently.
+The roadmap asked for randomness at note-on. The sample measurements say that
+is only half of it, and the more interesting half is not random at all.
 
-**Implementation.** Per-note random draws applied at `noteOn`: small jitter on
-`velocityAmp`, on `strikeDelay` (currently a fixed 2 ms), and on the excitation
-width; plus a low-probability "unexpected attack" that departs further. One
-`humanize` depth control, 0 = exactly today's behaviour.
+**Key variation** (`Key Variation`, default 0.35, in Tine). Fixed per key, from
+a hash of the note number -- so a note sounds like *itself* every time, which
+is what an instrument does. Q, tuning (±7 cents) and level (±2.5 dB) each get
+an independent draw. The justification is measured: Q in the reference library
+scatters between about 900 and 3600 **with no pattern in pitch** (r² 0.02, see
+`docs/measurements/`). That scatter was the leftover from 1.3 that would not
+fit a curve, and this is what it was.
 
-**This must be seedable.** A fixed seed per instance, resettable, so renders are
-reproducible and every test in `tests/` stays deterministic. A model that
-cannot be rendered twice identically is untestable, and several existing checks
-compare exact levels.
+**Strike variation** (`Strike Variation`, default 0.30, in Hammer). Random per
+note-on: contact time, amplitude, and the delay before the strike lands. Plus a
+low-probability "unexpected" draw, three times the depth -- a player does not
+produce a smooth distribution of attacks, and it is the outliers that stop a
+passage sounding sequenced. At the default it spans about 0.95 dB of level and
+0.9 dB of brightness; at 1.0, about 3.4 dB of each.
 
-**Verify:** with depth 0, output is bit-identical to the current build — worth
-asserting in the test suite. With depth up, two renders of the same MIDI differ
-audibly but neither clips nor glitches.
+Both are **exactly** off at 0, which is asserted as bit-identical output, and
+the engine is seeded in `prepare()` so a render repeats sample for sample.
+Variation that cannot be reproduced would make every other test in the suite
+worthless.
+
+#### The bug it exposed
+
+Jittering the strike delay made notes drop out entirely -- silent, roughly one
+in four at high settings. The gate that hides the filter clear on a fresh voice
+reopened at a fixed 2 ms, while the strike now arrived at a jittered time, and
+a negative draw put the whole excitation -- about ten samples of it -- in front
+of the gate, where `mix * gate` swallowed it.
+
+The gate now reopens exactly when the strike lands. That is what it should
+always have done: the mute exists to cover the state clear until the note
+starts, so tying it to a constant rather than to the strike was only ever right
+by coincidence.
 
 ---
 

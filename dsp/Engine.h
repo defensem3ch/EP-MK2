@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #include "Voice.h"
@@ -59,6 +60,7 @@ public:
         for (int i = 0; i < kMaxVoices; ++i)
             voices[i].prepare(sr);
         tremoloPhase = 0.0f;
+        rngState = 0x9E3779B9u;
         dcBlockX1 = dcBlockY1 = 0.0f;
         dcBlockCoeff = float(1.0 - 2.0 * M_PI * 5.0 / sr);   // hip~ 5
     }
@@ -80,7 +82,8 @@ public:
         // Same pitch, still sounding: the same tine struck again.
         const bool restrike = v.isActive() && (int)v.getNote() == midiNote;
         v.noteOn((float)midiNote, (float)velocity,
-                 noteToFrequency((float)midiNote, p), p.voice, restrike);
+                 noteToFrequency((float)midiNote, p), p.voice, restrike,
+                 drawStrike(p.voice.strikeVariation));
     }
 
     void noteOff(int midiNote, const EngineParams& p) noexcept
@@ -202,6 +205,36 @@ private:
         return best;
     }
 
+    // What this particular strike does.  Seeded from a fixed value in
+    // prepare(), so a render is reproducible: the instrument varies, the
+    // recording of it does not.
+    inline float nextRandom() noexcept
+    {
+        rngState ^= rngState << 13;
+        rngState ^= rngState >> 17;
+        rngState ^= rngState << 5;
+        return (float)(rngState >> 8) * (2.0f / 16777216.0f) - 1.0f;   // [-1, 1)
+    }
+
+    inline StrikeVariation drawStrike(float amount) noexcept
+    {
+        StrikeVariation sv;
+        if (amount <= 0.0f)
+            return sv;   // exactly the old behaviour, bit for bit
+
+        // Now and then a strike lands harder and shorter than asked for.  A
+        // player does not produce a smooth distribution of attacks, and it is
+        // the outliers that stop a passage sounding sequenced.
+        const bool unexpected = (nextRandom() > 1.0f - amount * 0.12f);
+        const float scale = unexpected ? 3.0f : 1.0f;
+
+        sv.contact   = std::pow(2.0f, amount * nextRandom() * 1.1f * scale);
+        sv.amplitude = 1.0f + amount * nextRandom() * 0.30f * scale;
+        sv.delaySec  = amount * nextRandom() * 0.0012f * scale;
+        if (sv.amplitude < 0.05f) sv.amplitude = 0.05f;
+        return sv;
+    }
+
     // Blend of a sine and a triangle, matching the patch's shape control.
     inline float tremolo(const EngineParams& p) noexcept
     {
@@ -224,6 +257,7 @@ private:
     PickupShaper shaper;
 
     float tremoloPhase = 0.0f;
+    uint32_t rngState = 0x9E3779B9u;
     float dcBlockX1 = 0.0f, dcBlockY1 = 0.0f, dcBlockCoeff = 0.999f;
 };
 

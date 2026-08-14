@@ -22,12 +22,23 @@
 #pragma once
 
 #include "Biquad.h"
+#include <cstdint>
+
 #include "Nonlinear.h"
 
 namespace epmk2 {
 
 // Per-voice parameters, already converted out of the dB the GUI uses.
 // `*Lin` fields are linear gains; frequencies are Hz; Q values are Q.
+// What a single strike happens to do, drawn fresh by the Engine for every
+// note-on.  All-neutral by default, so a voice driven without one behaves
+// exactly as it did before variation existed.
+struct StrikeVariation {
+    float contact = 1.0f;     // multiplies the hammer's contact time
+    float amplitude = 1.0f;   // multiplies the strike
+    float delaySec = 0.0f;    // added to the 2 ms strike delay
+};
+
 struct VoiceParams {
     // tine.  Three inharmonic modes; the ratios are measured, not derived --
     // an ideal cantilever would give 6.27 and 17.55, which is audibly a
@@ -130,6 +141,16 @@ struct VoiceParams {
     float buzzLevelLin = 1.0f;
     float buzzPhase = 1.0f;          // +1 or -1
 
+    // How much one key differs from the next.  Tines are individually cut and
+    // individually clamped, and the reference library bears that out: Q
+    // scatters between about 900 and 3600 with no pattern in pitch at all
+    // (docs/measurements/).  This is *not* randomness -- it is fixed per key,
+    // so a note sounds like itself every time, the way an instrument does.
+    float keyVariation = 0.35f;
+    // How much one strike differs from the next on the same key.  This is
+    // randomness, and it is what a sample cannot do.
+    float strikeVariation = 0.30f;
+
     bool sustainPedal = false;
 };
 
@@ -187,12 +208,22 @@ public:
     // a new note taking the voice over.  The two cases have to behave
     // differently: see the end of this function.
     void noteOn(float midiNote, float velocity, float freqHz,
-                const VoiceParams& p, bool restrike = false) noexcept
+                const VoiceParams& p, bool restrike = false,
+                const StrikeVariation& sv = {}) noexcept
     {
         note = midiNote;
         held = true;
         active = true;
 
+        // This key's own character: fixed, so it sounds like itself every
+        // time.  Detune is small -- a few cents is what a tine that has drifted
+        // sounds like; more than that reads as broken rather than real.
+        const int key = (int)midiNote;
+        keyQScale = std::pow(2.0f, p.keyVariation * keyDraw(key, 1u));
+        keyLevel  = std::pow(10.0f, p.keyVariation * keyDraw(key, 2u) * 2.5f / 20.0f);
+        const float cents = p.keyVariation * keyDraw(key, 3u) * 7.0f;
+
+        freqHz *= std::pow(2.0f, cents / 1200.0f);
         frequency = freqHz < 20.0f ? 20.0f
                   : (freqHz > 20000.0f ? 20000.0f : freqHz);
 
@@ -213,7 +244,8 @@ public:
         // pitch.
         const float velNorm = v / 127.0f;
         const float contactSec = p.hammerContactMs * 0.001f
-                               * std::pow(2.0f, -p.hammerVelContact * velNorm);
+                               * std::pow(2.0f, -p.hammerVelContact * velNorm)
+                               * sv.contact;
         strikeContactSamples = std::max(2.0f, float(sampleRate * contactSec));
         // A hammer imparts *momentum*, so what velocity sets is the area of the
         // pulse, not its height: shortening contact raises the peak force for
@@ -224,14 +256,17 @@ public:
         // The reference is the width the old pitch-tied pulse had at A3, so the
         // default contact time leaves the instrument's output level roughly
         // where MK1 had it and this is a change of timbre rather than of level.
-        strikeAmp = velocityAmp
+        strikeAmp = velocityAmp * sv.amplitude * keyLevel
                   * (kReferenceContactSec / std::max(1.0e-6f, contactSec));
         if (p.tineMassTracking != 0.0f)
             strikeAmp *= std::pow(kQReferenceFreq / frequency, p.tineMassTracking);
         // The damper landing at note-off is a different, much softer contact,
         // so it keeps the period-width pulse it always had.
         releasePeriodSamples = float(sampleRate / frequency);
-        strikeDelay = int(0.002 * sampleRate);
+        // At least one sample: the gate-restore branch below tests for the
+        // counter reaching zero, and also does the filter clear, so a delay of
+        // zero would skip both.
+        strikeDelay = std::max(1, int((0.002 + sv.delaySec) * sampleRate));
         strikeRamp = 1.0f;
         strikeInc = -1.0f / strikeContactSamples;
 
@@ -258,7 +293,12 @@ public:
             // instant the gate reopens, which is a step and audible as a click.
             gateTarget = 0.0f;
             gateInc = -gate / float(0.001 * sampleRate);
-            gateRestoreAt = int(0.002 * sampleRate);
+            // The gate must reopen exactly when the strike arrives, not at a
+            // fixed 2 ms.  Strike delay is jittered by the per-strike
+            // variation, and a negative draw used to put the whole excitation
+            // -- about ten samples of it -- in front of the gate, where
+            // `mix * gate` swallowed it and the note came out silent.
+            gateRestoreAt = strikeDelay;
         }
     }
 
@@ -414,7 +454,7 @@ public:
         // swung the level with it by about 9.5 dB, purely as an artefact.
         // The damper's release Q does not track -- that is the damper, not
         // the tine.
-        float toneQ = p.toneQ;
+        float toneQ = p.toneQ * keyQScale;
         if (!releasing && p.toneQTracking != 0.0f)
             toneQ *= std::pow(2.0f, p.toneQTracking * (note - kQReferenceNote) / 12.0f);
         if (toneQ < 1.0f)      toneQ = 1.0f;
@@ -448,7 +488,7 @@ public:
             if (active) {
                 // Higher modes damp faster.  With tineModeDamping at 0 every
                 // mode keeps the same Q, which is the pre-mode-3 behaviour.
-                double q = (double)p.tineQ;
+                double q = (double)p.tineQ * (double)keyQScale;
                 if (p.tineModeDamping != 0.0f && ratio > 0.0f && p.tineRatio1 > 0.0f)
                     q *= std::pow((double)p.tineRatio1 / (double)ratio,
                                   (double)p.tineModeDamping);
@@ -488,6 +528,20 @@ private:
 
     // A4: the pitch at which tone_decay means exactly what it says.
     static constexpr float kQReferenceNote = 69.0f;
+
+    // A hash of the note number, so each key gets its own fixed character.
+    // Deterministic on purpose: a key must sound like itself every time, and
+    // renders must be reproducible.  `salt` picks an independent draw, so Q,
+    // tuning and level do not move together.
+    static inline float keyDraw(int note, uint32_t salt) noexcept
+    {
+        uint32_t x = (uint32_t)(note * 2654435761u) ^ (salt * 2246822519u);
+        x ^= x >> 15; x *= 2246822519u;
+        x ^= x >> 13; x *= 3266489917u;
+        x ^= x >> 16;
+        // [-1, 1)
+        return (float)(x >> 8) * (2.0f / 16777216.0f) - 1.0f;
+    }
     static constexpr float kQReferenceFreq = 440.0f;
 
     // The impulse a unit-velocity strike delivers, expressed as the width of
@@ -527,6 +581,7 @@ private:
     float  note = 69.0f;
     float  velocityAmp = 1.0f;
     float  strikeAmp = 1.0f;
+    float  keyQScale = 1.0f, keyLevel = 1.0f;
     float  prevDisp = 0.0f;
     bool   fluxPrimed = false;
     float  inducedGain = 1.0f;

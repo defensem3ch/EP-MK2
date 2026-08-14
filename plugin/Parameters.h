@@ -60,6 +60,8 @@ inline const std::vector<Spec>& table()
         // blow.  The pickup differentiates, which is a real +6 dB/octave, and
         // without this the whole keyboard tilts against the bass.
         { "bass_tilt",       "Bass Tilt",       "Hammer", Unit::Ratio,      0.0f,     1.5f,    0.5f, false },
+        // How much one strike differs from the next.  0 is exactly repeatable.
+        { "strike_var",      "Strike Variation","Hammer", Unit::Ratio,      0.0f,     1.0f,    0.3f, false },
 
         // --- tine: what actually vibrates -----------------------------------
         { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,   -6.0f, false },
@@ -72,6 +74,8 @@ inline const std::vector<Spec>& table()
         { "tine_hipass",     "Tine High-Pass",  "Tine", Unit::Hertz,     20.0f, 20000.0f,   20.0f, true  },
         { "tine_decay",      "Tine Decay",      "Tine", Unit::Q,          1.0f,  2000.0f,  225.0f, true  },
         { "tine_mode_damp",  "Mode Damping",    "Tine", Unit::Ratio,      0.0f,     2.0f,    0.0f, true  },
+        // How much one key differs from the next -- fixed per key, not random.
+        { "key_var",         "Key Variation",   "Tine", Unit::Ratio,      0.0f,     1.0f,   0.35f, true  },
 
         // --- tone bar: what the tine is mounted on --------------------------
         { "tone_level",      "Tone Level",      "Tone Bar", Unit::Decibels, -100.0f,     0.0f,    0.0f, false },

@@ -683,6 +683,85 @@ int main()
         proc.prepareToPlay(sr, block);
     }
 
+    // ---- variation: no two notes quite alike -----------------------------
+    // Two different things, and they must not be confused.  Key variation is
+    // fixed per key -- tines are individually cut, and the reference library
+    // shows Q scattering 900 to 3600 with no pattern in pitch -- so a note
+    // sounds like itself every time.  Strike variation is random, and is the
+    // thing a sample cannot do.
+    {
+        auto renderNotes = [&](float keyVar, float strikeVar,
+                               const std::vector<int>& notes, std::vector<float>& out) {
+            if (auto* q = proc.getState().getParameter("key_var"))
+                q->setValueNotifyingHost(q->convertTo0to1(keyVar));
+            if (auto* q = proc.getState().getParameter("strike_var"))
+                q->setValueNotifyingHost(q->convertTo0to1(strikeVar));
+            proc.prepareToPlay(sr, block);   // reseeds, so renders repeat
+
+            juce::AudioBuffer<float> b(2, block);
+            out.clear();
+            for (int n : notes) {
+                juce::MidiBuffer panic;
+                panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+                renderPeak(proc, panic, 1, block);
+
+                juce::MidiBuffer m;
+                m.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8)100), 0);
+                for (int i = 0; i < blocksPerSecond / 3; ++i) {
+                    b.clear();
+                    proc.processBlock(b, m);
+                    m.clear();
+                    for (int k = 0; k < block; ++k)
+                        out.push_back(b.getSample(0, k));
+                }
+            }
+        };
+
+        auto rms = [](const std::vector<float>& v) {
+            double e = 0.0;
+            for (float x : v) e += double(x) * double(x);
+            return std::sqrt(e / std::max<size_t>(1, v.size()));
+        };
+        auto difference = [&](const std::vector<float>& a, const std::vector<float>& b) {
+            double d = 0.0;
+            const size_t n = std::min(a.size(), b.size());
+            for (size_t i = 0; i < n; ++i) {
+                const double x = double(a[i]) - double(b[i]);
+                d += x * x;
+            }
+            return std::sqrt(d / std::max<size_t>(1, n)) / std::max(1.0e-12, rms(a));
+        };
+
+        const std::vector<int> one { 45 }, scale { 45, 46, 47, 48 };
+        std::vector<float> a, b;
+
+        // Off means exactly off: the old behaviour, sample for sample.
+        renderNotes(0.0f, 0.0f, one, a);
+        renderNotes(0.0f, 0.0f, one, b);
+        check(a == b, "with variation off, output is bit-identical");
+
+        // On, it still has to be reproducible, or nothing downstream --
+        // rendering, testing, bouncing a track twice -- can be trusted.
+        renderNotes(0.35f, 0.30f, one, a);
+        renderNotes(0.35f, 0.30f, one, b);
+        check(a == b, "with variation on, a render still repeats exactly");
+
+        // Neighbouring keys differ from each other even with strike variation
+        // off, because the difference is in the tines, not the playing.
+        std::vector<float> flat, varied;
+        renderNotes(0.0f,  0.0f, scale, flat);
+        renderNotes(0.60f, 0.0f, scale, varied);
+        char kv[80];
+        snprintf(kv, sizeof kv, "  (%.1f%% apart)", difference(flat, varied) * 100.0);
+        check(difference(flat, varied) > 0.02, "each key has its own character", kv);
+
+        if (auto* q = proc.getState().getParameter("key_var"))
+            q->setValueNotifyingHost(q->convertTo0to1(0.35f));
+        if (auto* q = proc.getState().getParameter("strike_var"))
+            q->setValueNotifyingHost(q->convertTo0to1(0.30f));
+        proc.prepareToPlay(sr, block);
+    }
+
     // ---- factory presets -------------------------------------------------
     // A preset that loads but sounds like the one before it is not a preset,
     // so each is measured for level and brightness rather than merely checked
