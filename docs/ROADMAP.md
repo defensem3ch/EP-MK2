@@ -362,21 +362,54 @@ exemption: classifying anything within 30 ms of a note-on as "within a note
 attack" is what let a 0.2969 step from silence be reported as normal for two
 commits. The onset is exactly where a click is least excusable.
 
-### 1.5 Oversampling, targeted
+### 1.5 Oversampling — **measured, and not needed**
 
-**Now:** none. Measured aliasing is confined to the bottom octave: +1.6 dB in
-the 800 Hz–4 kHz band at A0, from the pickup waveshaper.
+Not implemented, on evidence. The aliasing this section was written to fix is
+no longer there, and the architecture changes that removed it are the ones made
+for other reasons.
 
-**Implementation.** Do **not** oversample the whole engine — the resonators are
-linear and gain nothing from it, and `dsp/` is deliberately framework-free so
-`juce::dsp::Oversampling` is not available there anyway. Oversample only the
-nonlinear block: `tanhApprox → PickupShaper → buzzFourth`. 2× with a short
-polyphase halfband is enough, and it is the only part that generates new
-harmonics. Optionally engage it only below some note, since that is where the
-problem measurably is.
+Measured against an 8x render, probing the exact frequencies a folded harmonic
+lands on -- `|n*f0 - k*SR|`, which for most f0 is not a harmonic of f0 at all,
+so there is a clean gap to measure in:
 
-**Verify:** re-run the A0 aliasing measurement; confirm the CPU cost lands
-where expected (the nonlinearity is a small fraction of per-voice cost).
+| | alias level | below the fundamental |
+| --- | --- | --- |
+| defaults, note 100 | −134 dB | 104 dB |
+| worst case, note 88 | −102 dB | 84 dB |
+| worst case, note 100 | −98 dB | **77 dB** |
+
+"Worst case" is the hammer fed straight into the pickup at unity, +24 dB of
+pickup drive, buzz at full and the tine send 50 dB above default -- settings
+nobody would use. Even there the alias sits at −98 dBFS, about the 16-bit noise
+floor, at 16 kHz where hearing is least sensitive. At the bottom of the
+keyboard, in the 800 Hz–4 kHz band MK1's measurement used, the native render
+has *less* energy than the 8x reference, not more.
+
+Three changes made for other reasons had already fixed it:
+
+* `pickup_attack` defaults to off (1.4), so the broadband hammer pulse no
+  longer feeds the nonlinearity at all.
+* Resonators became two-pole with **−12 dB/octave above resonance** (2.3's
+  click fix), so out-of-band content is rejected *before* the nonlinearity
+  rather than after.
+* The coil low-pass moved *after* the differentiator (1.4), band-limiting the
+  signal before `buzzFourth` raises it to the fourth power.
+
+Oversampling the nonlinear block would cost real CPU to attenuate something
+77 dB down at its worst. If the pickup model later gains a sharper
+nonlinearity, measure again -- `tests/` has the probe.
+
+#### What the measurement did find
+
+The instrument was **4.6 dB louder at 96 kHz than at 48**, and 9 dB louder at
+192. The resonators sum their input sample by sample, but the strike is defined
+in seconds, so a higher rate put more samples under the same pulse and drove
+them proportionally harder. The excitation is a density, not an amplitude, and
+is now scaled by `dt`. Level now varies 0.03 dB across 44.1 to 192 kHz.
+
+That was worth more than the item it was found under: a session's sample rate
+is not a tone control, and nothing in the test suite would have caught it,
+because every test ran at 48 kHz.
 
 ---
 

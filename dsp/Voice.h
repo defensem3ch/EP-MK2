@@ -163,6 +163,13 @@ public:
         envelopeDecay = float(std::exp(-1.0 / (0.05 * sr)));
         // Unity at A4 for the dPhi/dt differentiator.
         inducedGain = float(sr / (2.0 * M_PI * 440.0));
+        // The resonators sum their input sample by sample, but the strike is
+        // defined in seconds -- so a higher sample rate puts more samples under
+        // the same pulse and drives them proportionally harder.  The excitation
+        // has to be a density rather than an amplitude.  Without this the
+        // instrument came out 4.6 dB louder at 96 kHz than at 48, and 9 dB
+        // louder at 192: a different instrument depending on the session rate.
+        rateScale = float(kReferenceSampleRate / sr);
         reset();
     }
 
@@ -256,7 +263,7 @@ public:
         // The reference is the width the old pitch-tied pulse had at A3, so the
         // default contact time leaves the instrument's output level roughly
         // where MK1 had it and this is a change of timbre rather than of level.
-        strikeAmp = velocityAmp * sv.amplitude * keyLevel
+        strikeAmp = velocityAmp * sv.amplitude * keyLevel * rateScale
                   * (kReferenceContactSec / std::max(1.0e-6f, contactSec));
         if (p.tineMassTracking != 0.0f)
             strikeAmp *= std::pow(kQReferenceFreq / frequency, p.tineMassTracking);
@@ -348,7 +355,7 @@ public:
 
         float release = 0.0f;
         if (noteOffRamp > 0.0f) {
-            release = raisedCosine(noteOffRamp) * p.noteOffLevelLin;
+            release = raisedCosine(noteOffRamp) * p.noteOffLevelLin * rateScale;
             noteOffRamp += noteOffInc;
             if (noteOffRamp < 0.0f) noteOffRamp = 0.0f;
         }
@@ -544,6 +551,9 @@ private:
     }
     static constexpr float kQReferenceFreq = 440.0f;
 
+    // The rate the model's levels are calibrated at.
+    static constexpr double kReferenceSampleRate = 48000.0;
+
     // The impulse a unit-velocity strike delivers, expressed as the width of
     // an equivalent unit-height pulse.  Chosen so the instrument sits at a
     // sensible level with the tine modes now carrying real energy; see the
@@ -582,6 +592,7 @@ private:
     float  velocityAmp = 1.0f;
     float  strikeAmp = 1.0f;
     float  keyQScale = 1.0f, keyLevel = 1.0f;
+    float  rateScale = 1.0f;
     float  prevDisp = 0.0f;
     bool   fluxPrimed = false;
     float  inducedGain = 1.0f;

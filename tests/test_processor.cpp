@@ -762,6 +762,45 @@ int main()
         proc.prepareToPlay(sr, block);
     }
 
+    // ---- the same instrument at any sample rate --------------------------
+    // The resonators sum their input sample by sample while the strike is
+    // defined in seconds, so a higher rate used to put more samples under the
+    // same pulse and drive them harder: 4.6 dB louder at 96 kHz than at 48,
+    // and 9 dB at 192.  A session's sample rate is not a tone control.
+    {
+        auto levelAt = [](double rate) {
+            EpMk2Processor p;
+            p.setPlayConfigDetails(0, 2, rate, 512);
+            p.prepareToPlay(rate, 512);
+            if (auto* q = p.getState().getParameter("key_var"))
+                q->setValueNotifyingHost(0.0f);
+            if (auto* q = p.getState().getParameter("strike_var"))
+                q->setValueNotifyingHost(0.0f);
+
+            juce::MidiBuffer m;
+            m.addEvent(juce::MidiMessage::noteOn(1, 45, (juce::uint8)110), 0);
+            juce::AudioBuffer<float> b(2, 512);
+            float peak = 0.0f;
+            for (int i = 0; i < int(rate * 0.5) / 512; ++i) {
+                b.clear();
+                p.processBlock(b, m);
+                m.clear();
+                peak = std::max(peak, b.getMagnitude(0, b.getNumSamples()));
+            }
+            return peak;
+        };
+
+        const float at44 = levelAt(44100.0), at48 = levelAt(48000.0);
+        const float at96 = levelAt(96000.0), at192 = levelAt(192000.0);
+        const float lo = std::min(std::min(at44, at48), std::min(at96, at192));
+        const float hi = std::max(std::max(at44, at48), std::max(at96, at192));
+        const float spread = 20.0f * std::log10(hi / std::max(1.0e-9f, lo));
+        char sd[112];
+        snprintf(sd, sizeof sd, "  (%.4f/%.4f/%.4f/%.4f, %.2f dB apart)",
+                 at44, at48, at96, at192, spread);
+        check(spread < 0.5f, "level does not depend on the sample rate", sd);
+    }
+
     // ---- factory presets -------------------------------------------------
     // A preset that loads but sounds like the one before it is not a preset,
     // so each is measured for level and brightness rather than merely checked
