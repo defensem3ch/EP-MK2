@@ -1,0 +1,11 @@
+build/
+JUCE
+*.MID
+*.mid
+
+# Reference material we are allowed to analyse but not redistribute:
+# commercial sample libraries and paywalled papers.  Analysis *results*
+# are ours and may be committed.
+*.xrni
+samples/
+research/

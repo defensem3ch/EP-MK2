@@ -1,0 +1,16 @@
+#N canvas 0 0 620 460 10;
+#X obj 20 20 r freq @hv_param 20 20000 440;
+#X obj 300 20 r q @hv_param 0.001 5000 1000;
+#X obj 20 130 ep.resonator.coeff;
+#X obj 20 210 s fb1 @hv_param;
+#X obj 120 210 s fb2 @hv_param;
+#X obj 220 210 s ff1 @hv_param;
+#X obj 320 210 s ff2 @hv_param;
+#X obj 420 210 s ff3 @hv_param;
+#X connect 0 0 2 0;
+#X connect 1 0 2 1;
+#X connect 2 0 3 0;
+#X connect 2 1 4 0;
+#X connect 2 2 5 0;
+#X connect 2 3 6 0;
+#X connect 2 4 7 0;
