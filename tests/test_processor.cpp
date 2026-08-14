@@ -633,6 +633,32 @@ int main()
             char c[64]; snprintf(c, sizeof c, "  (%d distinct colours)", (int)seen.size());
             check(seen.size() > 50, "panel has controls drawn on it", c);
 
+            // Every control must sit inside the section that owns it.  The
+            // tine section quietly grew from 6 controls to 10 as modes were
+            // added, and an equal-height grid cut the bottom row off.
+            int overflowing = 0;
+            juce::String worstName;
+            std::function<void(juce::Component*)> walk = [&](juce::Component* comp) {
+                for (int k = 0; k < comp->getNumChildComponents(); ++k) {
+                    auto* child = comp->getChildComponent(k);
+                    if (auto* sec = dynamic_cast<ParamSection*>(child)) {
+                        const int bad = sec->controlsNotPlaced();
+                        if (bad > 0) {
+                            overflowing += bad;
+                            worstName = sec->getName();
+                        }
+                    }
+                    walk(child);
+                }
+            };
+            walk(ed.get());
+            char ov[128];
+            snprintf(ov, sizeof ov, "  (%d control%s without a place%s%s)",
+                     overflowing, overflowing == 1 ? "" : "s",
+                     overflowing ? ", worst: " : "",
+                     overflowing ? worstName.toRawUTF8() : "");
+            check(overflowing == 0, "every control fits in its section", ov);
+
             // Every parameter should have produced a visible control.
             int leaves = 0;
             std::function<void(juce::Component&)> countLeaves = [&](juce::Component& comp) {

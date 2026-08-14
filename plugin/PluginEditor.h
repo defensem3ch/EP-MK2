@@ -39,6 +39,12 @@ public:
     void paint(juce::Graphics&) override;
 
     int rowsNeeded(int columns) const;
+    // How many controls fit across a section of this outer width.
+    static int columnsForWidth(int width);
+    // Controls that were not given a usable place inside this section.  When
+    // a section runs out of room its remaining controls keep empty bounds, so
+    // the symptom is a *missing* control rather than one hanging outside.
+    int controlsNotPlaced() const;
 
 private:
     juce::String title;
@@ -63,9 +69,22 @@ public:
 
     void setVoiceCount(int n);
 
+    // The panel is as tall as its contents need at the design width.  Deriving
+    // it rather than hard-coding it means adding parameters cannot silently
+    // push controls out of the bottom of a section, which is exactly what the
+    // extra tine modes did.
+    int designHeight() const { return height; }
+
 private:
+    // Where each section sits, packed rather than laid out on a fixed grid.
+    void computeLayout(int width);
+
+    struct Placement { int column, y, height; };
+
     EpMk2Processor& proc;
     juce::OwnedArray<ParamSection> sections;
+    std::vector<Placement> placements;
+    int height = 0;
     int activeVoices = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PanelContent)
@@ -76,7 +95,8 @@ class EpMk2Editor : public juce::AudioProcessorEditor,
 {
 public:
     static constexpr int kDesignWidth  = 900;
-    static constexpr int kDesignHeight = 620;
+    // Height comes from the panel's contents; see PanelContent::designHeight.
+    int designHeight = 0;
 
     explicit EpMk2Editor(EpMk2Processor&);
     ~EpMk2Editor() override = default;

@@ -9,6 +9,7 @@ constexpr int kControlHeight = 78;
 constexpr int kSectionHeader = 26;
 constexpr int kHeaderHeight  = 50;
 constexpr int kPad           = 8;
+constexpr int kSectionColumns = 3;
 }
 
 //==============================================================================
@@ -61,6 +62,7 @@ void ParamControl::resized()
 ParamSection::ParamSection(juce::AudioProcessorValueTreeState& tree, const juce::String& name)
     : title(name), colour(sectionColour(name))
 {
+    setName(name);
     for (const auto& spec : table())
         if (name == spec.section)
             addAndMakeVisible(controls.add(new ParamControl(tree, spec)));
@@ -69,6 +71,23 @@ ParamSection::ParamSection(juce::AudioProcessorValueTreeState& tree, const juce:
 int ParamSection::rowsNeeded(int columns) const
 {
     return (controls.size() + columns - 1) / juce::jmax(1, columns);
+}
+
+int ParamSection::controlsNotPlaced() const
+{
+    int bad = 0;
+    for (const auto* c : controls) {
+        const auto b = c->getBounds();
+        if (b.getWidth() < kControlWidth / 2 || b.getHeight() < kControlHeight / 2
+            || !getLocalBounds().contains(b))
+            ++bad;
+    }
+    return bad;
+}
+
+int ParamSection::columnsForWidth(int width)
+{
+    return juce::jmax(1, (width - 2 * kPad) / kControlWidth);
 }
 
 void ParamSection::paint(juce::Graphics& g)
@@ -108,6 +127,8 @@ PanelContent::PanelContent(EpMk2Processor& p, juce::AudioProcessorValueTreeState
 {
     for (const auto& name : sectionOrder())
         addAndMakeVisible(sections.add(new ParamSection(tree, name)));
+
+    computeLayout(EpMk2Editor::kDesignWidth);
 }
 
 void PanelContent::setVoiceCount(int n)
@@ -136,23 +157,51 @@ void PanelContent::paint(juce::Graphics& g)
                header.reduced(16, 0), juce::Justification::centredRight);
 }
 
+// Three columns, with each section going into whichever is currently shortest.
+// A fixed grid cannot do this well: the sections hold 2, 4, 10, 8, 8 and 4
+// controls, so an equal split both cut the bottom off Tine and drew Output as
+// a mostly empty box four rows tall.  Packing keeps the columns level and the
+// panel as short as its contents allow.
+void PanelContent::computeLayout(int width)
+{
+    const int cellW = (width - 2 * kPad) / kSectionColumns;
+    // A section is inset by 4 either side inside its column.
+    const int innerCols = ParamSection::columnsForWidth(cellW - 8);
+
+    int columnHeight[kSectionColumns] = {};
+    placements.clear();
+
+    for (int i = 0; i < sections.size(); ++i) {
+        int shortest = 0;
+        for (int c = 1; c < kSectionColumns; ++c)
+            if (columnHeight[c] < columnHeight[shortest])
+                shortest = c;
+
+        const int h = kSectionHeader + 4
+                    + sections[i]->rowsNeeded(innerCols) * kControlHeight
+                    + kPad;
+        placements.push_back({ shortest, columnHeight[shortest], h });
+        columnHeight[shortest] += h;
+    }
+
+    int tallest = 0;
+    for (int c = 0; c < kSectionColumns; ++c)
+        tallest = juce::jmax(tallest, columnHeight[c]);
+    height = kHeaderHeight + 2 * kPad + tallest;
+}
+
 void PanelContent::resized()
 {
     auto r = getLocalBounds();
     r.removeFromTop(kHeaderHeight);
     r.reduce(kPad, kPad);
 
-    // Two rows of three, roughly how the original panel was arranged.
-    const int columns = 3;
-    const int rows = (sections.size() + columns - 1) / columns;
-    const int cellW = r.getWidth() / columns;
-    const int cellH = r.getHeight() / juce::jmax(1, rows);
-
-    for (int i = 0; i < sections.size(); ++i) {
-        const int col = i % columns, row = i / columns;
-        sections[i]->setBounds(juce::Rectangle<int>(r.getX() + col * cellW,
-                                                    r.getY() + row * cellH,
-                                                    cellW, cellH).reduced(4));
+    const int cellW = r.getWidth() / kSectionColumns;
+    for (int i = 0; i < sections.size() && i < (int)placements.size(); ++i) {
+        const auto& pl = placements[(size_t)i];
+        sections[i]->setBounds(juce::Rectangle<int>(r.getX() + pl.column * cellW,
+                                                    r.getY() + pl.y,
+                                                    cellW, pl.height).reduced(4));
     }
 }
 
@@ -160,17 +209,18 @@ void PanelContent::resized()
 EpMk2Editor::EpMk2Editor(EpMk2Processor& p)
     : juce::AudioProcessorEditor(&p), proc(p), content(p, p.getState())
 {
+    designHeight = content.designHeight();
     addAndMakeVisible(content);
 
     setResizable(true, true);
     // Locked to the design aspect so the scale factor is the same in both
     // directions and nothing stretches.
     if (auto* c = getConstrainer())
-        c->setFixedAspectRatio((double)kDesignWidth / (double)kDesignHeight);
-    setResizeLimits(kDesignWidth * 2 / 3, kDesignHeight * 2 / 3,
-                    kDesignWidth * 2,     kDesignHeight * 2);
+        c->setFixedAspectRatio((double)kDesignWidth / (double)designHeight);
+    setResizeLimits(kDesignWidth * 2 / 3, designHeight * 2 / 3,
+                    kDesignWidth * 2,     designHeight * 2);
 
-    setSize(kDesignWidth, kDesignHeight);
+    setSize(kDesignWidth, designHeight);
     startTimerHz(10);
 }
 
@@ -187,9 +237,9 @@ void EpMk2Editor::paint(juce::Graphics& g)
 void EpMk2Editor::resized()
 {
     const float scale = juce::jmin((float)getWidth()  / (float)kDesignWidth,
-                                   (float)getHeight() / (float)kDesignHeight);
+                                   (float)getHeight() / (float)designHeight);
     // Bounds are in pre-transform coordinates; JUCE maps mouse events through
     // the transform, so the controls stay hittable at any size.
     content.setTransform(juce::AffineTransform::scale(scale));
-    content.setBounds(0, 0, kDesignWidth, kDesignHeight);
+    content.setBounds(0, 0, kDesignWidth, designHeight);
 }
