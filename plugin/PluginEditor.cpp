@@ -15,7 +15,7 @@ namespace {
 // of name instead of two, the name against its own knob, and no ragged line
 // starts along a row.  It is what sets the design width.
 constexpr int kControlWidth  = 137;
-constexpr int kControlHeight = 124;
+constexpr int kControlHeight = 149;   // see the breakdown below
 constexpr int kSectionHeader = 30;
 constexpr int kHeaderHeight  = 56;
 
@@ -98,8 +98,20 @@ inline void fillVertical(juce::Graphics& g, juce::Rectangle<float> r,
                                            juce::Colour(bottom), r.getX(), r.getBottom(),
                                            false));
 }
-// One line of name, which is all any of them needs at kControlWidth.
-constexpr int   kLabelArea   = 18;
+// What a control's height is made of.  The knob is drawn into the square that
+// fits its box, so at 137px wide the box's *height* is what sets the knob's
+// size -- it was 47, and a 43px knob in a 137px cell reads as a small object
+// in a large space.  72 puts the knob at about half the cell's width.
+//
+// These have to add up to kControlHeight, which is asserted below.
+constexpr int   kLabelArea   = 18;   // one line of name, all any of them needs
+constexpr int   kKnobTop     = 5;    // so the knob is not against its name
+constexpr int   kKnobArea    = 72;   // the square the knob is drawn into
+constexpr int   kValueBox    = 24;   // the slider's own text box
+constexpr int   kRowGap      = 30;   // air before the next row's name
+static_assert(kLabelArea + kKnobTop + kKnobArea + kValueBox + kRowGap
+                  == kControlHeight,
+              "a control's parts must fill its height");
 // Space between the section's coloured header and the first row of names.
 // Paired with kSectionBottomPad: the header is a solid block of colour and
 // the names are the first thing under it, so with only a few pixels between
@@ -132,7 +144,7 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
             juce::AudioProcessorValueTreeState::ButtonAttachment>(tree, spec.id, button);
     } else {
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 88, 24);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 88, kValueBox);
         // No suffix or decimal count here: the parameter's own
         // stringFromValue supplies both, and setting them again doubles the
         // unit ("0.0 dB dB").
@@ -205,13 +217,18 @@ void ParamControl::resized()
     auto r = getLocalBounds();
     r.removeFromTop(kLabelArea);
     if (isToggle)
-        button.setBounds(r.withTrimmedBottom(12).withSizeKeepingCentre(56, 56));
+        // In the same band as the knobs, so a toggle sits on the row rather
+        // than floating between it and the row below.  It has no value box,
+        // and centring it in the space that includes one dropped it low.
+        button.setBounds(r.withTrimmedTop(kKnobTop)
+                          .withTrimmedBottom(kValueBox + kRowGap)
+                          .withSizeKeepingCentre(kKnobArea, kKnobArea));
     else
         // The bottom trim is the gap *between* rows, and it has to be clearly
         // larger than the space between a knob and its own value, or proximity
-        // groups the value with the row beneath it instead.  The single-line
-        // name gave back a line's worth of height, and it goes here.
-        slider.setBounds(r.reduced(4, 0).withTrimmedTop(5).withTrimmedBottom(30));
+        // groups the value with the row beneath it instead.
+        slider.setBounds(r.reduced(4, 0).withTrimmedTop(kKnobTop)
+                                        .withTrimmedBottom(kRowGap));
 }
 
 //==============================================================================
