@@ -2070,6 +2070,56 @@ int main()
                       "a scale greys out the controls it takes over", db);
             }
 
+            // Command-clicking the title has to actually write a file.  The
+            // code being present in the binary is not the same as the click
+            // reaching it: the header is drawn by this component but the
+            // event has to survive scaling, child components and the
+            // modifier check before it gets anywhere.
+            {
+                // Count, do not clean.  This folder belongs to whoever is
+                // using the plugin, and the first version of this test wiped
+                // it -- destroying a dump someone had just spent an evening
+                // arriving at.  A test may only remove what it created.
+                auto dumps = epmk2::presetdump::folder();
+                juce::Array<juce::File> existing;
+                dumps.findChildFiles(existing, juce::File::findFiles, false);
+                const int before = existing.size();
+
+                PanelContent* content = nullptr;
+                std::function<void(juce::Component*)> findIt = [&](juce::Component* c) {
+                    for (int k = 0; k < c->getNumChildComponents(); ++k) {
+                        if (auto* pc = dynamic_cast<PanelContent*>(c->getChildComponent(k)))
+                            content = pc;
+                        findIt(c->getChildComponent(k));
+                    }
+                };
+                findIt(ed.get());
+
+                auto source = juce::Desktop::getInstance().getMainMouseSource();
+                const juce::ModifierKeys command(juce::ModifierKeys::commandModifier);
+                const juce::Point<float> onTitle(40.0f, 20.0f);
+                const juce::MouseEvent click(source, onTitle, command, 1.0f, 0.0f, 0.0f,
+                                             0.0f, 0.0f, content, content,
+                                             juce::Time::getCurrentTime(), onTitle,
+                                             juce::Time::getCurrentTime(), 1, false);
+                if (content != nullptr)
+                    content->mouseDown(click);
+
+                juce::Array<juce::File> now;
+                dumps.findChildFiles(now, juce::File::findFiles, false);
+                const int after = now.size();
+
+                // Take away only what this test added.
+                for (const auto& f : now)
+                    if (! existing.contains(f))
+                        f.deleteFile();
+
+                char cb[192];
+                snprintf(cb, sizeof cb, "  (%d -> %d files in %s)", before, after,
+                         dumps.getFullPathName().toRawUTF8());
+                check(after == before + 1, "command-clicking the title writes a dump", cb);
+            }
+
             // A shortened name has to be recoverable.  The panel says
             // "Distance" because it is only as wide as its longest name; the
             // info bar has a whole strip and says "Pickup Distance", so the

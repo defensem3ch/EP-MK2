@@ -68,11 +68,26 @@ inline juce::String text(const juce::AudioProcessorValueTreeState& state,
 
 // Where the dumps go.  Documents rather than the config directory the window
 // size lives in: this is a file meant to be found and sent to someone.
+//
+// Not JUCE's userDocumentsDirectory on Linux, which is the *home* directory --
+// the same trap the settings file already had a comment about.  With the
+// project checked out at ~/EP-MK2 that put the dumps inside the source tree,
+// where they were neither found nor safe.
 inline juce::File folder()
 {
-    auto documents = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
+    auto home = juce::File::getSpecialLocation(juce::File::userHomeDirectory);
+
+   #if JUCE_LINUX || JUCE_BSD
+    auto documents = juce::File(
+        juce::SystemStats::getEnvironmentVariable("XDG_DOCUMENTS_DIR", {}));
     if (! documents.isDirectory())
-        documents = juce::File::getSpecialLocation(juce::File::userHomeDirectory);
+        documents = home.getChildFile("Documents");
+   #else
+    auto documents = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
+   #endif
+
+    if (! documents.isDirectory())
+        documents = home;
     return documents.getChildFile("EP-MK2").getChildFile("dumps");
 }
 
