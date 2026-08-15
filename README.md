@@ -10,14 +10,6 @@ a note that is not identical every time you play it.
 
 ![The EP-MK2 panel](docs/screenshot.png)
 
-Regenerate that with `epmk2-screenshot`, which renders at the design size
-rather than at whatever size a window happened to be:
-
-```bash
-cmake --build build --target EPMK2_screenshot
-./build/EPMK2_screenshot_artefacts/Release/EPMK2_screenshot docs/screenshot.png --param trem_on 1
-```
-
 ## Lineage
 
 * **EP-MK1** — Pure Data physical model by Miguel Moreno (Mike Moreno Audio),
