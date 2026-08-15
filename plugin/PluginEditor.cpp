@@ -9,7 +9,12 @@
 using namespace epmk2::params;
 
 namespace {
-constexpr int kControlWidth  = 100;
+// Wide enough that no name has to wrap: the longest, "Hammer to Pickup", is
+// 132px on one line, and a control gives its name four pixels less than its
+// own width.  Everything about how the names sit follows from that -- one line
+// of name instead of two, the name against its own knob, and no ragged line
+// starts along a row.  It is what sets the design width.
+constexpr int kControlWidth  = 137;
 constexpr int kControlHeight = 124;
 constexpr int kSectionHeader = 30;
 constexpr int kHeaderHeight  = 56;
@@ -93,9 +98,8 @@ inline void fillVertical(juce::Graphics& g, juce::Rectangle<float> r,
                                            juce::Colour(bottom), r.getX(), r.getBottom(),
                                            false));
 }
-// Room for two lines of label.
-// Two lines of name, so every knob below it is the same size.
-constexpr int   kLabelArea   = 36;
+// One line of name, which is all any of them needs at kControlWidth.
+constexpr int   kLabelArea   = 18;
 // Space between the section's coloured header and the first row of names.
 // Paired with kSectionBottomPad: the header is a solid block of colour and
 // the names are the first thing under it, so with only a few pixels between
@@ -175,22 +179,17 @@ void ParamControl::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour(0xffe4e4e4));
     g.setFont(panelFont(kLabelFont));
-    // The name area is a fixed two lines, and the text sits at the *top* of it.
+    // One line, and one line only.  Two lines were a compromise with a panel
+    // too narrow to hold the longest name, and every way of arranging them was
+    // wrong somewhere: sized to the text and the knobs came out different
+    // sizes; fixed and bottom-aligned and names started at different heights
+    // along a row; fixed and top-aligned and a short name floated a line clear
+    // of the knob it belongs to.  Widening the control until nothing wraps
+    // removes the choice rather than settling it.
     //
-    // Fixed is forced: sizing the area to the text made controls with long
-    // names smaller than their neighbours, and a knob's height has to be the
-    // same everywhere for rows to line up across the panel's three columns.
-    //
-    // Top is a choice, and it costs something.  A one-line name leaves its
-    // spare line between itself and its knob, where it reads as a gap.  Put
-    // the spare line above instead and the name hugs its knob, but then names
-    // start at different heights depending on whether they wrap -- and with
-    // the rows aligned across the columns, that difference is visible right
-    // along a row.  Starting every name at the same height wins.
-    //
-    // Closing the gap as well would mean no name ever wrapping, which needs
-    // 136px per control against the 101 they get: "Hammer to Pickup" is 132px
-    // on one line.  That is a design width of 1720 rather than 1300.
+    // maximumLines is 1 so this cannot quietly regress: a name that no longer
+    // fits is clipped, and the test below fails, rather than growing a second
+    // line into space that is no longer reserved for it.
     // No horizontal squashing (1.0) and no more than two lines.  JUCE's
     // default lets it compress glyphs to about 0.7 of their width to make text
     // fit, which is why some names looked narrower than others -- and it
@@ -198,7 +197,7 @@ void ParamControl::paint(juce::Graphics& g)
     // panel is drawn at exactly the same size, and the cell has to be wide
     // enough for the longest word instead.
     g.drawFittedText(label, getLocalBounds().removeFromTop(kLabelArea).reduced(2, 0),
-                     juce::Justification::centredTop, 2, 1.0f);
+                     juce::Justification::centredTop, 1, 1.0f);
 }
 
 void ParamControl::resized()
@@ -208,12 +207,11 @@ void ParamControl::resized()
     if (isToggle)
         button.setBounds(r.withTrimmedBottom(12).withSizeKeepingCentre(56, 56));
     else
-        // The trim is the gap *between* rows.  It has to be larger than the
-        // space between the knob and its own value, or proximity groups them
-        // the wrong way round.
-        // A few pixels above the knob and below it, so it is not pressed
-        // against its name or its value.
-        slider.setBounds(r.reduced(4, 0).withTrimmedTop(5).withTrimmedBottom(12));
+        // The bottom trim is the gap *between* rows, and it has to be clearly
+        // larger than the space between a knob and its own value, or proximity
+        // groups the value with the row beneath it instead.  The single-line
+        // name gave back a line's worth of height, and it goes here.
+        slider.setBounds(r.reduced(4, 0).withTrimmedTop(5).withTrimmedBottom(30));
 }
 
 //==============================================================================

@@ -1390,22 +1390,12 @@ int main()
                 auto widthOf = [&](const juce::String& t) {
                     return juce::GlyphArrangement::getStringWidthInt(labelFont, t);
                 };
-                // The narrowest a name can be drawn without squashing: the
-                // best split into two lines, or the longest word if it cannot
-                // be split usefully.
+                // The whole name on one line.  The panel reserves a single
+                // line for it, so a name that does not fit is clipped rather
+                // than wrapped -- this has to measure what is actually drawn,
+                // not the best two-line split it could fall back to.
                 auto required = [&](const juce::String& name) {
-                    auto words = juce::StringArray::fromTokens(name, " ", "");
-                    if (words.size() < 2)
-                        return widthOf(name);
-                    int best = widthOf(name);
-                    for (int k = 1; k < words.size(); ++k) {
-                        juce::StringArray a, b;
-                        for (int i = 0; i < words.size(); ++i)
-                            (i < k ? a : b).add(words[i]);
-                        best = juce::jmin(best, juce::jmax(widthOf(a.joinIntoString(" ")),
-                                                           widthOf(b.joinIntoString(" "))));
-                    }
-                    return best;
+                    return widthOf(name);
                 };
 
                 int worstOver = 0;
@@ -1422,7 +1412,7 @@ int main()
                          widestControl - 4, worstName.isEmpty() ? "none"
                                                                 : worstName.toRawUTF8(),
                          worstOver);
-                check(worstOver == 0, "no label has to be squashed to fit", lb);
+                check(worstOver == 0, "every name fits on one line, unsquashed", lb);
             }
 
             // Rows of knobs must line up across the panel's three columns.
