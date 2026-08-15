@@ -253,8 +253,14 @@ public:
         const float cents = p.keyVariation * keyDraw(key, 3u) * 7.0f;
 
         freqHz *= std::pow(2.0f, cents / 1200.0f);
-        frequency = freqHz < 20.0f ? 20.0f
-                  : (freqHz > 20000.0f ? 20000.0f : freqHz);
+        baseFrequency = freqHz;
+        frequency = clampAudible(freqHz);
+
+        // Where this voice sits in the vibrato's cycle.  Per key rather than
+        // global, and fixed for that key: one LFO applied to every voice makes
+        // a chord swell and fall as a single object, which is the giveaway of
+        // a synthesiser.  Real players do not have one wrist per hand.
+        vibratoOffset = 0.5f * (keyDraw(key, 4u) + 1.0f);
 
         // 2^(-5 * (1 - (vel-1)/126)): a five-octave velocity range, matching
         // the patch's [/ 126] -> [1 $1] -> [-] -> [* -5] -> [2 $1] -> [pow].
@@ -498,6 +504,18 @@ public:
 
     // Re-derive every filter from the current parameters.  Called on note-on
     // and whenever a parameter that feeds a coefficient changes.
+    // Move a sounding note without restarting it.  Everything derived from
+    // pitch at note-on -- the strike amplitude, the release period -- stays as
+    // it was: this is the same tine bending, not a new one.
+    void retune(const VoiceParams& p, float scale) noexcept
+    {
+        frequency = clampAudible(baseFrequency * scale);
+        configure(p, ! held);
+    }
+
+    // Where this voice sits in the vibrato cycle, 0..1.
+    float vibratoPhaseOffset() const noexcept { return vibratoOffset; }
+
     void configure(const VoiceParams& p, bool releasing) noexcept
     {
         const double sr = sampleRate;
@@ -577,6 +595,11 @@ private:
     // Modes are skipped above this fraction of the sample rate.  Short of
     // Nyquist itself: a high-Q bandpass placed right at the edge is both
     // numerically poor and inaudible.
+    static inline float clampAudible(float f) noexcept
+    {
+        return f < 20.0f ? 20.0f : (f > 20000.0f ? 20000.0f : f);
+    }
+
     static constexpr float kNyquistFraction = 0.45f;
 
     // A4: the pitch at which tone_decay means exactly what it says.
@@ -634,6 +657,11 @@ private:
 
     double sampleRate = 48000.0;
     float  frequency = 440.0f;
+    // What the key is tuned to, before bend or vibrato.  Kept separately so
+    // repeated retunes do not compound: scaling `frequency` in place would
+    // make the pitch a running product of every wheel position it has seen.
+    float  baseFrequency = 440.0f;
+    float  vibratoOffset = 0.0f;
     float  note = 69.0f;
     float  velocityAmp = 1.0f;
     float  strikeAmp = 1.0f;

@@ -816,104 +816,92 @@ void PanelContent::computeLayout()
         slot[(size_t) i] = tall[(size_t) i] + kGutter;
     }
 
-    // Split the sections into three *contiguous* runs, one per column, and
-    // keep the split with the shortest tallest column.
+    // Split the sections into three *contiguous* runs, one per column.
     //
     // Contiguous is the point.  Dealing sections into whichever column
     // balances best packs them tighter, but it reorders them -- and the order
     // is signal flow, which is the one thing the grouping is for.  Reading
     // column by column, a contiguous split preserves it exactly.
     //
-    // Filling the shortest column as you go, which is what this did before,
-    // does neither: it reorders *and* it commits early, so it cannot see a
-    // tall section still to come and leaves one column a section short.
-    std::vector<int> best((size_t) n, 0);
-    int bestTallest = std::numeric_limits<int>::max();
-    int bestSpread = std::numeric_limits<int>::max();
+    // Each candidate split is scored by laying it out for real, because the
+    // snapping below adds height that a sum of section heights cannot see:
+    // scoring on the sum and then snapping produced a split whose columns did
+    // not fit the height that had been chosen for them, at which point the
+    // snap gave up and the rows came off the grid by 58px.
+    struct Layout {
+        std::vector<Placement> places;
+        int height = 0;
+    };
 
-    for (int firstCut = 1; firstCut <= n; ++firstCut) {
-        for (int secondCut = firstCut; secondCut <= n; ++secondCut) {
-            int used[kSectionColumns] = {};
-            for (int i = 0; i < n; ++i) {
-                const int c = i < firstCut ? 0 : (i < secondCut ? 1 : 2);
-                used[c] += slot[(size_t) i];
-            }
-            int hi = 0, lo = std::numeric_limits<int>::max();
-            for (int c = 0; c < kSectionColumns; ++c) {
-                hi = juce::jmax(hi, used[c]);
-                lo = juce::jmin(lo, used[c]);
-            }
-            if (hi < bestTallest || (hi == bestTallest && hi - lo < bestSpread)) {
-                bestTallest = hi;
-                bestSpread = hi - lo;
-                for (int i = 0; i < n; ++i)
-                    best[(size_t) i] = i < firstCut ? 0 : (i < secondCut ? 1 : 2);
-            }
-        }
-    }
+    auto layOut = [&](const std::vector<int>& column) {
+        Layout out;
 
-    // Where the slack in the shorter columns goes.
-    //
-    // Packed from the top, every column starts at zero and then diverges: they
-    // hold different numbers of sections of different heights, so their
-    // internal boundaries -- and the rows inside them -- land at unrelated
-    // heights, and a knob in one column sits a few pixels off the knob beside
-    // it.  Near-misses like that read as a mistake rather than as a decision.
-    //
-    // Sharing each column's slack evenly between its sections lines the
-    // *boundaries* up but not the rows, because a section's overhead (header
-    // and padding) is not a whole number of rows: a column carrying one more
-    // header than its neighbour is offset by that overhead forever after.
-    //
-    // So the tallest column, which has no slack and is therefore packed,
-    // defines the grid, and every other section drops to the next position
-    // where its own first row lands on one of those rows.  The slack ends up
-    // distributed as whole rows, which is the only way it can be spent without
-    // taking the rows off the grid.
-    int total[kSectionColumns] = {};
-    for (int i = 0; i < n; ++i)
-        total[best[(size_t) i]] += slot[(size_t) i];
-
-    int ref = 0;
-    for (int c = 1; c < kSectionColumns; ++c)
-        if (total[c] > total[ref])
-            ref = c;
-
-    const int overhead = kSectionHeader + kGutter;
-    std::vector<int> rowTop;   // ascending, so the first match is the nearest
-    {
-        int y = 0;
+        // The tallest column has no slack, so it is packed and defines the
+        // grid.  Every other section drops to the next position where its own
+        // first row lands on one of that column's rows.  The slack is spent in
+        // whole rows, which is the only way it can be spent without taking the
+        // rows off the grid: a section's overhead is not a whole number of
+        // rows, so a column carrying one more header than its neighbour would
+        // otherwise stay offset by that overhead for the rest of its length.
+        int total[kSectionColumns] = {};
         for (int i = 0; i < n; ++i)
-            if (best[(size_t) i] == ref) {
-                const int rows = sections[i]->rowsNeeded(innerCols);
-                for (int k = 0; k < rows; ++k)
-                    rowTop.push_back(y + overhead + k * (kControlHeight + kGutter));
-                y += slot[(size_t) i];
-            }
-    }
+            total[column[(size_t) i]] += slot[(size_t) i];
 
-    int cursor[kSectionColumns] = {};
-    placements.clear();
-    for (int i = 0; i < n; ++i) {
-        const int c = best[(size_t) i];
-        int y = cursor[c];
-        if (c != ref)
-            for (int row : rowTop) {
-                const int top = row - overhead;
-                // Never past the bottom of the panel: a section that cannot be
-                // snapped without overflowing stays where it was.
-                if (top >= cursor[c] && top + slot[(size_t) i] <= bestTallest) {
-                    y = top;
-                    break;
+        int ref = 0;
+        for (int c = 1; c < kSectionColumns; ++c)
+            if (total[c] > total[ref])
+                ref = c;
+
+        const int overhead = kSectionHeader + kGutter;
+        std::vector<int> rowTop;   // ascending, so the first match is the nearest
+        {
+            int y = 0;
+            for (int i = 0; i < n; ++i)
+                if (column[(size_t) i] == ref) {
+                    const int rows = sections[i]->rowsNeeded(innerCols);
+                    for (int k = 0; k < rows; ++k)
+                        rowTop.push_back(y + overhead + k * (kControlHeight + kGutter));
+                    y += slot[(size_t) i];
                 }
-            }
-        placements.push_back({ c, y, tall[(size_t) i] });
-        cursor[c] = y + slot[(size_t) i];
-    }
+        }
 
-    // bestTallest carries a trailing gutter for the last section in its
-    // column, which has nothing after it to be separated from.
-    height = kHeaderHeight + 2 * kGutter + bestTallest - kGutter + kInfoBarHeight;
+        int cursor[kSectionColumns] = {};
+        for (int i = 0; i < n; ++i) {
+            const int c = column[(size_t) i];
+            int y = cursor[c];
+            if (c != ref)
+                for (int row : rowTop) {
+                    const int top = row - overhead;
+                    if (top >= cursor[c]) {
+                        y = top;
+                        break;
+                    }
+                }
+            out.places.push_back({ c, y, tall[(size_t) i] });
+            cursor[c] = y + slot[(size_t) i];
+        }
+
+        for (int c = 0; c < kSectionColumns; ++c)
+            out.height = juce::jmax(out.height, cursor[c]);
+        return out;
+    };
+
+    Layout best;
+    std::vector<int> column((size_t) n, 0);
+    for (int firstCut = 1; firstCut <= n; ++firstCut)
+        for (int secondCut = firstCut; secondCut <= n; ++secondCut) {
+            for (int i = 0; i < n; ++i)
+                column[(size_t) i] = i < firstCut ? 0 : (i < secondCut ? 1 : 2);
+            Layout candidate = layOut(column);
+            if (best.places.empty() || candidate.height < best.height)
+                best = std::move(candidate);
+        }
+
+    placements = best.places;
+
+    // The tallest column carries a trailing gutter for its last section,
+    // which has nothing after it to be separated from.
+    height = kHeaderHeight + 2 * kGutter + best.height - kGutter + kInfoBarHeight;
 }
 
 void PanelContent::resized()

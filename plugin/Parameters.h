@@ -13,7 +13,8 @@
 // conversion lived somewhere other than the declaration.
 namespace epmk2::params {
 
-enum class Unit { Decibels, Linear, Hertz, Q, Ratio, Toggle, Count, Millis };
+enum class Unit { Decibels, Linear, Hertz, Q, Ratio, Toggle, Count, Millis,
+                  Semitones, Cents };
 
 struct Spec {
     const char* id;
@@ -67,6 +68,15 @@ inline const std::vector<Spec>& table()
           "How many notes may sound at once. Costs CPU directly: with the pedal down a note rings for tens of seconds, so voices stay genuinely busy." },
         { "sustain",         "Sustain Pedal",   "Output", Unit::Toggle,     0.0f,     1.0f,    0.0f, false,
           "Lifts the dampers, exactly as MIDI CC64 does. Released notes keep ringing until it drops." },
+        { "bend_range",      "Pitch Bend Range", "Output", Unit::Semitones,  0.0f,    24.0f,    2.0f, false,
+          "How far the pitch wheel bends, at its extreme. 2 is the usual setting and what most players expect; 12 gives a whole octave. At 0 the wheel does nothing.",
+          "Bend Range" },
+        { "vib_depth",       "Vibrato Depth",   "Output", Unit::Cents,      0.0f,   100.0f,    0.0f, false,
+          "How far vibrato moves the pitch, either side of the note. Off at 0. This is pitch movement, unlike the Tremolo section, which moves level -- a Rhodes suitcase has the latter and no player has the former, so this is an effect rather than a model of anything.",
+          "Vib Depth" },
+        { "vib_rate",        "Vibrato Rate",    "Output", Unit::Hertz,      0.1f,    12.0f,    5.0f, true,
+          "How fast the vibrato sweeps. Each key sits at its own point in the cycle, so a chord shimmers instead of swelling and falling as one object.",
+          "Vib Rate" },
 
         // --- hammer: the strike ---------------------------------------------
         { "hammer_level",    "Hammer Level",    "Hammer", Unit::Decibels, -100.0f,     0.0f, -100.0f, false,
@@ -243,6 +253,8 @@ inline int decimalsFor(Unit u)
         case Unit::Q:        return 0;
         case Unit::Millis:   return 2;
         case Unit::Count:    return 0;
+        case Unit::Semitones: return 1;
+        case Unit::Cents:    return 0;
         default:             return 0;
     }
 }
@@ -253,6 +265,8 @@ inline juce::String suffixFor(Unit u)
         case Unit::Decibels: return " dB";
         case Unit::Hertz:    return " Hz";
         case Unit::Millis:   return " ms";
+        case Unit::Semitones: return " st";
+        case Unit::Cents:    return " ct";
         default:             return {};
     }
 }

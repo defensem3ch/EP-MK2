@@ -30,6 +30,18 @@ struct EngineParams {
     float divisions = 12.0f;
     float interval = 2.0f;
 
+    // How far the wheel bends at its extreme, and where the wheel is.  Kept
+    // apart because the range is a parameter the host owns and the wheel is a
+    // live MIDI value -- combining them in one field meant whichever was
+    // written last won, which is the bug CC64 had.
+    float bendRangeSemis = 2.0f;
+    float bendWheel = 0.0f;          // -1 .. 1
+
+    // Pitch bend, in semitones: the wheel scaled by its range.  Vibrato is in
+    // cents, which is the unit that stays meaningful across the keyboard.
+    float vibratoDepthCents = 0.0f;
+    float vibratoRateHz = 5.0f;
+
     // An unequal scale, when one is loaded, which overrides the two above.
     // A bare pointer and a count rather than a container: this is read on the
     // audio thread, and the processor publishes a fixed array it will not
@@ -89,6 +101,9 @@ public:
         for (int i = 0; i < kMaxVoices; ++i)
             voices[i].prepare(sr);
         tremoloPhase = 0.0f;
+        vibratoPhase = 0.0f;
+        pitchCountdown = 0;
+        pitchMoving = false;
         couplingBus = 0.0f;
         coupledLast = 0;
         voiceLast.fill(0.0f);
@@ -172,6 +187,11 @@ public:
         shaper.setGeometry(p.voice.pickupDistance, p.voice.pickupOffset);
         setVoiceCount(p.polyphony);
 
+        if (--pitchCountdown <= 0) {
+            pitchCountdown = kPitchInterval;
+            updatePitch(p);
+        }
+
         // Sympathetic resonance: every undamped tine hears what the others are
         // doing, through the frame they share.  The bus is last sample's sum,
         // which breaks the algebraic loop -- and the delay is physically
@@ -242,6 +262,33 @@ public:
         for (int i = 0; i < voiceCount; ++i)
             n += voices[i].isActive() ? 1 : 0;
         return n;
+    }
+
+    void updatePitch(const EngineParams& p) noexcept
+    {
+        vibratoPhase += float(kPitchInterval * p.vibratoRateHz / sampleRate);
+        if (vibratoPhase >= 1.0f)
+            vibratoPhase -= 1.0f;
+
+        const bool vibrato = p.vibratoDepthCents > 0.0f;
+        const float bend = p.bendWheel * p.bendRangeSemis;
+        const bool moving = vibrato || bend != 0.0f;
+        if (! moving && ! pitchMoving)
+            return;
+
+        const float bendCents = bend * 100.0f;
+        for (int i = 0; i < voiceCount; ++i) {
+            if (! voices[i].isActive())
+                continue;
+            float cents = bendCents;
+            if (vibrato) {
+                const float phase = vibratoPhase + voices[i].vibratoPhaseOffset();
+                cents += p.vibratoDepthCents
+                       * std::sin(2.0f * float(M_PI) * phase);
+            }
+            voices[i].retune(p.voice, std::pow(2.0f, cents / 1200.0f));
+        }
+        pitchMoving = moving;
     }
 
     void configureAll(const EngineParams& p) noexcept
@@ -360,6 +407,20 @@ private:
     PickupShaper shaper;
 
     float tremoloPhase = 0.0f;
+
+    // Bend and vibrato move a note that is already sounding, which means
+    // re-deriving every resonator on every voice.  That is far too much to do
+    // per sample, so it happens at a control rate -- 64 samples is 750 Hz at
+    // 48k, which is smooth against a vibrato of a few Hz and cheap enough to
+    // leave running.
+    static constexpr int kPitchInterval = 64;
+    float vibratoPhase = 0.0f;
+    int   pitchCountdown = 0;
+    // Whether anything was moving the pitch last time.  Without this, letting
+    // the wheel go would leave every sounding note bent: the work is skipped
+    // when nothing is moving, so the pass that puts the notes *back* has to be
+    // allowed to happen once after it stops.
+    bool  pitchMoving = false;
     float couplingScale = kCouplingScale;
     float couplingBus = 0.0f;
     int coupledLast = 0;

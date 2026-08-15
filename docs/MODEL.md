@@ -48,6 +48,18 @@ The Pd original's tuning, kept because it generalises: any equal division of
 any interval, not just 12 per octave. Unequal scales are not supported yet
 (roadmap 4.5).
 
+**Bend and vibrato move a note that is already sounding.** `Voice::retune`
+re-derives every resonator from a base frequency held separately from the
+current one -- separately, because scaling the current frequency in place
+would make the pitch a running product of every wheel position it had seen.
+It runs at a control rate of 64 samples and is skipped when nothing is moving,
+with one pass allowed after it stops so a released wheel puts the notes back.
+Measured at +0.8% of a core over 32 voices, and it does not step the output.
+
+Vibrato's phase is per key, from the same hash below: one LFO across every
+voice makes a chord swell and fall as a single object, which is the giveaway
+of a synthesiser.
+
 Two per-key offsets are applied on top, both derived from a hash of the note
 number so they are fixed for a given key rather than random:
 

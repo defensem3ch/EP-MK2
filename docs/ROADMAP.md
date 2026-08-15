@@ -704,7 +704,7 @@ checked against it.
 Neither of these is in the model at all yet, and both are things a player
 reaches for rather than refinements of the physics.
 
-### 4.1 Pitch bend
+### 4.1 Pitch bend — **done**
 
 MIDI pitch bend is currently ignored: `handleMidi` looks at note on/off, CC64,
 CC120 and CC123 and nothing else.
@@ -720,7 +720,24 @@ frequency while it rings is exactly the kind of edit that steps the output.
 
 Range should be a parameter (±2 semitones conventionally).
 
-### 4.2 Vibrato
+**What shipped.** `Voice::retune` moves a sounding note by re-deriving its
+resonators from a base frequency kept separately -- separately because scaling
+`frequency` in place would make the pitch a running product of every wheel
+position it had ever seen. Everything set at note-on from pitch (strike
+amplitude, release period) stays as it was: this is the same tine bending, not
+a new one.
+
+It runs at a control rate of 64 samples, 750 Hz at 48k, and is skipped
+entirely when nothing is moving -- with one pass allowed *after* it stops, or
+letting go of the wheel would leave every sounding note bent.
+
+Both worries were checked and neither bit. Sweeping the wheel across a held
+chord steps the output by 0.043 against a 0.71 peak, and vibrato by 0.055
+against 0.76 -- both well inside what the waveform's own slope does. The cost
+at 32 voices is 13.2% of a core idle and 14.0% with vibrato running, so the
+retune itself is **+0.8%**.
+
+### 4.2 Vibrato — **done**
 
 Pitch modulation, as distinct from the tremolo already present -- that is
 amplitude. Same mechanism as pitch bend and best built on it: an LFO feeding
@@ -737,8 +754,18 @@ Two things worth getting right, since a Rhodes is not a synth:
   that or leave vibrato purely in the pitch domain is a question for when 4.1
   exists.
 
-Neither is on the critical path for the physics, but both are needed before
-anyone would call this playable.
+**What shipped.** Depth in cents and rate in Hz, both in the Output section
+with the bend range. Depth defaults to 0, so it is off until asked for.
+
+**Per-voice phase, as above.** Each key takes its position in the cycle from
+the same hash that gives it its Q and its detune, so it is fixed for that key
+and a chord shimmers rather than swelling and falling as one object.
+
+**Not done: delay-to-onset**, and not done: the interaction with the pickup.
+Real vibrato on an electric piano moves the tine relative to the pole piece,
+so it is partly a *geometry* effect and not purely a pitch one. That is a real
+modelling question and it wants 1.8 or 4.6 underneath it -- vibrato here is an
+effect, and the help text says so rather than pretending otherwise.
 
 ### 4.3 Inline help on hover — **done**
 

@@ -167,6 +167,14 @@ void EpMk2Processor::handleMidi(const juce::MidiMessage& m)
             p->setValueNotifyingHost(ccSustain ? 1.0f : 0.0f);
         updatePedal();
     }
+    else if (m.isPitchWheel()) {
+        // 0..16383 with 8192 at rest, and the two halves are not symmetrical:
+        // 8192 units below centre against 8191 above.  Scaling by the larger
+        // would stop the wheel quite reaching its range at the top.
+        const int raw = m.getPitchWheelValue() - 8192;
+        bendWheel = raw < 0 ? (float) raw / 8192.0f : (float) raw / 8191.0f;
+        params.bendWheel = bendWheel;
+    }
     else if (m.isAllNotesOff())
         engine.allNotesOff(params);
     else if (m.isAllSoundOff())
@@ -206,6 +214,10 @@ void EpMk2Processor::processBlock(juce::AudioBuffer<float>& buffer,
     // fold CC64 back in before anything is rendered.
     paramSustain = params.voice.sustainPedal;
     updatePedal();
+
+    // Same shape as the pedal: apply() has just overwritten the whole struct
+    // from the parameter tree, and the wheel is not in it.
+    params.bendWheel = bendWheel;
 
     // Point at whichever scale slot is live, once, so the whole block uses one
     // tuning even if the message thread publishes another halfway through it.

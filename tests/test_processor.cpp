@@ -1106,10 +1106,19 @@ int main()
             EpMk2Processor proc;
             proc.setPlayConfigDetails(0, 2, sr, block);
             proc.prepareToPlay(sr, block);
-            // Tremolo on, so the tremolo controls are live rather than
-            // downstream of a switch that is off.
-            if (auto* t = proc.getState().getParameter("trem_on"))
-                t->setValueNotifyingHost(1.0f);
+            // The performance has to reach every control.  Tremolo and
+            // vibrato are both switched off by a depth of zero, and a bend
+            // range does nothing until the wheel moves -- so all three are
+            // set up first, and then the parameter under test overwrites its
+            // own baseline.  Without this the audit reported Bend Range and
+            // Vibrato Rate as dead controls, which is what it would report
+            // for a genuinely dead one.
+            auto set = [&proc](const char* which, float v) {
+                if (auto* p = proc.getState().getParameter(which))
+                    p->setValueNotifyingHost(p->convertTo0to1(v));
+            };
+            set("trem_on", 1.0f);
+            set("vib_depth", 30.0f);
             if (auto* p = proc.getState().getParameter(id))
                 p->setValueNotifyingHost(p->convertTo0to1(value));
 
@@ -1119,6 +1128,8 @@ int main()
             juce::MidiBuffer midi;
             for (int n : { 40, 47, 52, 56, 59, 64 })
                 midi.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8) 100), 0);
+            // Wheel hard over, so Bend Range has something to scale.
+            midi.addEvent(juce::MidiMessage::pitchWheel(1, 16383), 1);
 
             // Both channels, laid end to end.  Stereo is the reason: it
             // swings the two in antiphase against a mono tremolo that moves
@@ -1246,6 +1257,100 @@ int main()
                   && noTone < all - 0.5 && noTine < all - 0.1
                   && noBar < neither - 8.0,
               "the pickup and the direct paths each carry part of it", rb);
+    }
+
+    // ---- bend and vibrato -------------------------------------------------
+    // Both move a note that is already sounding, which means re-deriving every
+    // resonator on every voice while it rings.  The roadmap flagged two things
+    // to check before believing it: that it does not click, and what it costs.
+    {
+        const double sr = 48000.0;
+        const int block = 128;
+
+        // Sweep the wheel across a held chord and look for a step.  A high-Q
+        // resonator whose frequency is edited mid-ring is exactly the kind of
+        // change that puts a discontinuity in the output, and at the control
+        // rate this runs at, a bad one would show as a sample-to-sample jump
+        // far larger than the waveform's own slope.
+        auto sweep = [&](bool bend, double& worstJump, double& peak) {
+            EpMk2Processor proc;
+            proc.setPlayConfigDetails(0, 2, sr, block);
+            proc.prepareToPlay(sr, block);
+            if (auto* p = proc.getState().getParameter("vib_depth"))
+                p->setValueNotifyingHost(p->convertTo0to1(bend ? 0.0f : 80.0f));
+
+            juce::MidiBuffer midi;
+            for (int n : { 40, 52, 59, 64 })
+                midi.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8) 110), 0);
+
+            const int total = (int) (2.0 * sr);
+            juce::AudioBuffer<float> buf(2, block);
+            float previous = 0.0f;
+            worstJump = 0.0; peak = 0.0;
+            for (int pos = 0; pos < total; pos += block) {
+                if (bend) {
+                    // A full sweep down and back over the two seconds.
+                    const double t = (double) pos / total;
+                    const int wheel = (int) (8192 + 8191 * std::sin(2.0 * M_PI * t));
+                    midi.addEvent(juce::MidiMessage::pitchWheel(1, wheel), 0);
+                }
+                buf.clear();
+                proc.processBlock(buf, midi);
+                midi.clear();
+                // Skip the attack, which is a step by design.
+                if (pos < 0.2 * sr) {
+                    previous = buf.getSample(0, buf.getNumSamples() - 1);
+                    continue;
+                }
+                for (int i = 0; i < buf.getNumSamples(); ++i) {
+                    const float x = buf.getSample(0, i);
+                    worstJump = juce::jmax(worstJump, (double) std::abs(x - previous));
+                    peak = juce::jmax(peak, (double) std::abs(x));
+                    previous = x;
+                }
+            }
+        };
+
+        double bendJump = 0.0, bendPeak = 0.0, vibJump = 0.0, vibPeak = 0.0;
+        sweep(true, bendJump, bendPeak);
+        sweep(false, vibJump, vibPeak);
+
+        // What a clean waveform's largest step is: at the top of the model's
+        // range one sample of a 2 kHz sine at full scale moves about 0.26.
+        // Anything near that is the signal; a retune click is not subtle.
+        char jb[160];
+        snprintf(jb, sizeof jb, "  (bend %.3f of %.2f peak, vibrato %.3f of %.2f)",
+                 bendJump, bendPeak, vibJump, vibPeak);
+        check(bendJump < bendPeak * 0.35 && vibJump < vibPeak * 0.35,
+              "sweeping the pitch does not step the output", jb);
+
+        // And the cost, since retuning is not free and vibrato leaves it
+        // running for as long as a note sounds.
+        auto cost = [&](float depth) {
+            EpMk2Processor proc;
+            proc.setPlayConfigDetails(0, 2, sr, block);
+            proc.prepareToPlay(sr, block);
+            if (auto* p = proc.getState().getParameter("vib_depth"))
+                p->setValueNotifyingHost(p->convertTo0to1(depth));
+            juce::MidiBuffer midi;
+            for (int n = 36; n < 68; ++n)
+                midi.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8) 100), 0);
+            juce::AudioBuffer<float> buf(2, block);
+            const int total = (int) (2.0 * sr);
+            const auto start = juce::Time::getHighResolutionTicks();
+            for (int pos = 0; pos < total; pos += block) {
+                buf.clear();
+                proc.processBlock(buf, midi);
+                midi.clear();
+            }
+            return juce::Time::highResolutionTicksToSeconds(
+                       juce::Time::getHighResolutionTicks() - start) / 2.0 * 100.0;
+        };
+        const double idle = cost(0.0f), moving = cost(80.0f);
+        char cb[160];
+        snprintf(cb, sizeof cb, "  (32 voices: %.1f%% of a core, %.1f%% with vibrato,"
+                                " +%.1f)", idle, moving, moving - idle);
+        check(moving < 60.0, "retuning while it sounds is affordable", cb);
     }
 
     // ---- tunings ---------------------------------------------------------
