@@ -175,20 +175,22 @@ void ParamControl::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour(0xffe4e4e4));
     g.setFont(panelFont(kLabelFont));
-    // The name area is a fixed two lines, and the text sits at the *bottom* of
-    // it, so a one-line name is padded from above.
+    // The name area is a fixed two lines, and the text sits at the *top* of it.
     //
-    // Both halves of that are forced.  Fixed, because sizing the area to the
-    // text made controls with long names smaller than their neighbours, and
-    // because a knob's height has to be the same everywhere for rows to line
-    // up across the panel's three columns.  Bottom, because the spare line has
-    // to go somewhere: above the name keeps the name against the knob it
-    // belongs to, below it opens a gap and the eye stops reading the two as
-    // one object.  Top alignment was tried, and that gap is what it costs.
+    // Fixed is forced: sizing the area to the text made controls with long
+    // names smaller than their neighbours, and a knob's height has to be the
+    // same everywhere for rows to line up across the panel's three columns.
     //
-    // What this gives up is names starting on a common line across rows of
-    // different name lengths.  That is the cheaper loss -- a name is read
-    // with its own knob, not across the panel.
+    // Top is a choice, and it costs something.  A one-line name leaves its
+    // spare line between itself and its knob, where it reads as a gap.  Put
+    // the spare line above instead and the name hugs its knob, but then names
+    // start at different heights depending on whether they wrap -- and with
+    // the rows aligned across the columns, that difference is visible right
+    // along a row.  Starting every name at the same height wins.
+    //
+    // Closing the gap as well would mean no name ever wrapping, which needs
+    // 136px per control against the 101 they get: "Hammer to Pickup" is 132px
+    // on one line.  That is a design width of 1720 rather than 1300.
     // No horizontal squashing (1.0) and no more than two lines.  JUCE's
     // default lets it compress glyphs to about 0.7 of their width to make text
     // fit, which is why some names looked narrower than others -- and it
@@ -196,7 +198,7 @@ void ParamControl::paint(juce::Graphics& g)
     // panel is drawn at exactly the same size, and the cell has to be wide
     // enough for the longest word instead.
     g.drawFittedText(label, getLocalBounds().removeFromTop(kLabelArea).reduced(2, 0),
-                     juce::Justification::centredBottom, 2, 1.0f);
+                     juce::Justification::centredTop, 2, 1.0f);
 }
 
 void ParamControl::resized()
