@@ -109,8 +109,9 @@ constexpr int   kLabelArea   = 21;   // one line of name, all any of them needs
 constexpr int   kKnobTop     = 5;    // so the knob is not against its name
 constexpr int   kKnobArea    = 58;   // the square the knob is drawn into
 constexpr int   kValueBox    = 27;   // the slider's own text box
-constexpr int   kRowGap      = 30;   // air before the next row's name
-static_assert(kLabelArea + kKnobTop + kKnobArea + kValueBox + kRowGap
+constexpr int   kCellBottom  = 6;    // tint below the value box, so it is not flush
+constexpr int   kRowGap      = 24;   // untinted space before the next row
+static_assert(kLabelArea + kKnobTop + kKnobArea + kValueBox + kCellBottom + kRowGap
                   == kControlHeight,
               "a control's parts must fill its height");
 // Space between the section's coloured header and the first row of names.
@@ -186,7 +187,8 @@ void ParamControl::paint(juce::Graphics& g)
     // row's label directly beneath, at the same spacing as the gap inside the
     // control -- and the eye pairs the value with the wrong name.  This is the
     // cheapest way to say which three things belong together.
-    const auto cell = getLocalBounds().reduced(2, 1).toFloat();
+    const auto cell = getLocalBounds().withTrimmedBottom(kRowGap)
+                                      .reduced(2, 1).toFloat();
     fillVertical(g, cell, col::cellTop, col::cellBottom);
     g.fillRoundedRectangle(cell, 4.0f);
 
@@ -222,14 +224,14 @@ void ParamControl::resized()
         // than floating between it and the row below.  It has no value box,
         // and centring it in the space that includes one dropped it low.
         button.setBounds(r.withTrimmedTop(kKnobTop)
-                          .withTrimmedBottom(kValueBox + kRowGap)
+                          .withTrimmedBottom(kValueBox + kCellBottom + kRowGap)
                           .withSizeKeepingCentre(kKnobArea, kKnobArea));
     else
         // The bottom trim is the gap *between* rows, and it has to be clearly
         // larger than the space between a knob and its own value, or proximity
         // groups the value with the row beneath it instead.
         slider.setBounds(r.reduced(4, 0).withTrimmedTop(kKnobTop)
-                                        .withTrimmedBottom(kRowGap));
+                                        .withTrimmedBottom(kCellBottom + kRowGap));
 }
 
 //==============================================================================
@@ -252,8 +254,11 @@ int ParamSection::controlsNotPlaced() const
     int bad = 0;
     for (const auto* c : controls) {
         const auto b = c->getBounds();
+        // Against the tinted block, not the whole cell: a cell's last kRowGap
+        // is the space before the next row, so the bottom row's hangs off the
+        // section by design.  Nothing is drawn in it.
         if (b.getWidth() < kControlWidth / 2 || b.getHeight() < kControlHeight / 2
-            || !getLocalBounds().contains(b))
+            || !getLocalBounds().contains(b.withTrimmedBottom(kRowGap)))
             ++bad;
     }
     return bad;
@@ -261,9 +266,11 @@ int ParamSection::controlsNotPlaced() const
 
 int ParamSection::bottomMargin() const
 {
+    // To the bottom of the tinted block, which is what is actually seen.  A
+    // cell extends kRowGap past it, and the last row's overhangs the section.
     int lowest = 0;
     for (const auto* c : controls)
-        lowest = juce::jmax(lowest, c->getBottom());
+        lowest = juce::jmax(lowest, c->getBottom() - kRowGap);
     return getHeight() - lowest;
 }
 
@@ -291,13 +298,17 @@ void ParamSection::paint(juce::Graphics& g)
 
 void ParamSection::resized()
 {
-    auto r = getLocalBounds().reduced(kPad, 0);
-    r.removeFromTop(kSectionHeader + kSectionTopPad);
+    // Positioned by index rather than by consuming the height, because the
+    // section is deliberately kRowGap shorter than its rows add up to: the
+    // last row's gap belongs to the row above it, not to the section, so it
+    // hangs off the bottom.  Taking rows off a rectangle would silently hand
+    // the last one whatever was left and shrink it.
+    const int width = getWidth() - 2 * kPad;
+    const int columns = juce::jmax(1, width / kControlWidth);
 
-    const int columns = juce::jmax(1, r.getWidth() / kControlWidth);
-    int i = 0;
-    while (i < controls.size() && r.getHeight() > 0) {
-        auto row = r.removeFromTop(kControlHeight);
+    int y = kSectionHeader + kSectionTopPad;
+    for (int i = 0; i < controls.size(); y += kControlHeight) {
+        auto row = juce::Rectangle<int>(kPad, y, width, kControlHeight);
 
         // A short last row still divides by the full column count, so its
         // cells stay under the ones above rather than spreading out.
@@ -526,8 +537,14 @@ void PanelContent::computeLayout(int width)
     const int n = sections.size();
     std::vector<int> tall((size_t) n);
     for (int i = 0; i < n; ++i)
+        // Less kRowGap: that gap separates one row from the next, so the
+        // last row has nothing to be separated from and the section would
+        // otherwise carry it as padding on top of its own -- which is what
+        // made the space under a section's last row look wrong against the
+        // space under its header.
         tall[(size_t) i] = kSectionHeader + kSectionTopPad
                          + sections[i]->rowsNeeded(innerCols) * kControlHeight
+                         - kRowGap
                          + kSectionBottomPad;
 
     // Split the sections into three *contiguous* runs, one per column, and
