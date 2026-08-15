@@ -1425,6 +1425,49 @@ int main()
                 check(worstOver == 0, "no label has to be squashed to fit", lb);
             }
 
+            // Rows of knobs must line up across the panel's three columns.
+            // They are laid out per section, so nothing makes them agree by
+            // construction: a section that starts at a different height, or a
+            // row that reserves a different amount of space for its names,
+            // puts its knobs a few pixels off its neighbours' -- close enough
+            // to read as a mistake rather than as a decision.
+            //
+            // Near-misses are the whole point, so this does not bucket: any
+            // two knobs within half a row of each other must be at *exactly*
+            // the same height.
+            {
+                std::vector<std::pair<int, juce::String>> knobY;
+                std::function<void(juce::Component*)> collect = [&](juce::Component* comp) {
+                    for (int k = 0; k < comp->getNumChildComponents(); ++k) {
+                        auto* child = comp->getChildComponent(k);
+                        if (auto* pc = dynamic_cast<ParamControl*>(child))
+                            for (int j = 0; j < pc->getNumChildComponents(); ++j)
+                                if (dynamic_cast<juce::Slider*>(pc->getChildComponent(j)))
+                                    knobY.push_back({ pc->getChildComponent(j)->getScreenPosition().y,
+                                                      pc->getName() });
+                        collect(child);
+                    }
+                };
+                collect(ed.get());
+
+                int worst = 0;
+                juce::String worstPair;
+                for (size_t a = 0; a < knobY.size(); ++a)
+                    for (size_t b = a + 1; b < knobY.size(); ++b) {
+                        const int d = std::abs(knobY[a].first - knobY[b].first);
+                        if (d > 0 && d < 62 && d > worst) {
+                            worst = d;
+                            worstPair = knobY[a].second + " / " + knobY[b].second;
+                        }
+                    }
+                char rb[160];
+                snprintf(rb, sizeof rb, "  (%d knobs, worst near-miss %d px%s%s)",
+                         (int) knobY.size(), worst,
+                         worst ? ": " : "", worstPair.toRawUTF8());
+                check(worst == 0 && ! knobY.empty(),
+                      "knob rows line up across the columns", rb);
+            }
+
             // Value boxes sitting flush on the section border look unfinished.
             int tightest = 10000;
             juce::String tightestName;

@@ -96,7 +96,6 @@ inline void fillVertical(juce::Graphics& g, juce::Rectangle<float> r,
 // Room for two lines of label.
 // Two lines of name, so every knob below it is the same size.
 constexpr int   kLabelArea   = 36;
-constexpr int   kLabelLine   = kLabelArea / 2;
 // Space between the section's coloured header and the first row of names.
 // Paired with kSectionBottomPad: the header is a solid block of colour and
 // the names are the first thing under it, so with only a few pixels between
@@ -119,6 +118,7 @@ constexpr int kSectionColumns = 3;
 ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec& spec)
     : label(spec.name), help(spec.help), isToggle(spec.unit == Unit::Toggle)
 {
+    setName(spec.name);
     if (isToggle) {
         button.setColour(juce::ToggleButton::tickColourId,
                          sectionColour(spec.section).withMultipliedSaturation(1.15f));
@@ -175,52 +175,34 @@ void ParamControl::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour(0xffe4e4e4));
     g.setFont(panelFont(kLabelFont));
-    // The name area is a fixed two lines so that every knob comes out the same
-    // size -- sizing it to the text made controls with long names smaller than
-    // their neighbours.  The text is aligned to the *top* of that area, so
-    // every name in a row starts on the same line whether it wraps or not; a
-    // one-line name then sits a line clear of its knob rather than against it.
+    // The name area is a fixed two lines, and the text sits at the *bottom* of
+    // it, so a one-line name is padded from above.
+    //
+    // Both halves of that are forced.  Fixed, because sizing the area to the
+    // text made controls with long names smaller than their neighbours, and
+    // because a knob's height has to be the same everywhere for rows to line
+    // up across the panel's three columns.  Bottom, because the spare line has
+    // to go somewhere: above the name keeps the name against the knob it
+    // belongs to, below it opens a gap and the eye stops reading the two as
+    // one object.  Top alignment was tried, and that gap is what it costs.
+    //
+    // What this gives up is names starting on a common line across rows of
+    // different name lengths.  That is the cheaper loss -- a name is read
+    // with its own knob, not across the panel.
     // No horizontal squashing (1.0) and no more than two lines.  JUCE's
     // default lets it compress glyphs to about 0.7 of their width to make text
     // fit, which is why some names looked narrower than others -- and it
     // shrinks the font height too.  Forbidding both means every label on the
     // panel is drawn at exactly the same size, and the cell has to be wide
     // enough for the longest word instead.
-    auto content = contentArea();
-    g.drawFittedText(label, content.removeFromTop(labelLines * kLabelLine).reduced(2, 0),
-                     juce::Justification::centredTop, labelLines, 1.0f);
-}
-
-juce::Rectangle<int> ParamControl::contentArea() const
-{
-    const int used = labelLines * kLabelLine + (kControlHeight - kLabelArea);
-    return getLocalBounds().withSizeKeepingCentre(
-        getWidth(), juce::jmin(getHeight(), used));
-}
-
-int ParamControl::labelLinesNeeded(int width) const
-{
-    // What drawFittedText will do: one line if the whole name fits across the
-    // cell, two if it has to break.  The reduced(2, 0) in paint is why this
-    // measures against four pixels less than the cell.
-    const juce::Font f(panelFont(kLabelFont));
-    return juce::GlyphArrangement::getStringWidthInt(f, label) <= width - 4 ? 1 : 2;
-}
-
-void ParamControl::setLabelLines(int lines)
-{
-    lines = juce::jlimit(1, 2, lines);
-    if (lines == labelLines)
-        return;
-    labelLines = lines;
-    resized();
-    repaint();
+    g.drawFittedText(label, getLocalBounds().removeFromTop(kLabelArea).reduced(2, 0),
+                     juce::Justification::centredBottom, 2, 1.0f);
 }
 
 void ParamControl::resized()
 {
-    auto r = contentArea();
-    r.removeFromTop(labelLines * kLabelLine);
+    auto r = getLocalBounds();
+    r.removeFromTop(kLabelArea);
     if (isToggle)
         button.setBounds(r.withTrimmedBottom(12).withSizeKeepingCentre(56, 56));
     else
@@ -299,26 +281,10 @@ void ParamSection::resized()
     while (i < controls.size() && r.getHeight() > 0) {
         auto row = r.removeFromTop(kControlHeight);
 
-        // Widths first, because how many lines a name needs depends on the
-        // width it gets, and the whole row has to agree on a line count before
-        // any of it can be positioned.  A short last row still divides by the
-        // full column count, so its cells stay under the ones above.
-        std::vector<juce::Rectangle<int>> cells;
-        {
-            auto rest = row;
-            for (int c = 0; c < columns && i + c < controls.size(); ++c)
-                cells.push_back(rest.removeFromLeft(rest.getWidth() / (columns - c)));
-        }
-
-        int lines = 1;
-        for (size_t c = 0; c < cells.size(); ++c)
-            lines = juce::jmax(lines,
-                               controls[i + (int) c]->labelLinesNeeded(cells[c].getWidth()));
-
-        for (size_t c = 0; c < cells.size(); ++c, ++i) {
-            controls[i]->setLabelLines(lines);
-            controls[i]->setBounds(cells[c]);
-        }
+        // A short last row still divides by the full column count, so its
+        // cells stay under the ones above rather than spreading out.
+        for (int c = 0; c < columns && i < controls.size(); ++c, ++i)
+            controls[i]->setBounds(row.removeFromLeft(row.getWidth() / (columns - c)));
     }
 }
 
@@ -577,12 +543,63 @@ void PanelContent::computeLayout(int width)
         }
     }
 
-    int columnHeight[kSectionColumns] = {};
+    // Where the slack in the shorter columns goes.
+    //
+    // Packed from the top, every column starts at zero and then diverges: they
+    // hold different numbers of sections of different heights, so their
+    // internal boundaries -- and the rows inside them -- land at unrelated
+    // heights, and a knob in one column sits a few pixels off the knob beside
+    // it.  Near-misses like that read as a mistake rather than as a decision.
+    //
+    // Sharing each column's slack evenly between its sections lines the
+    // *boundaries* up but not the rows, because a section's overhead (header
+    // and padding) is not a whole number of rows: a column carrying one more
+    // header than its neighbour is offset by that overhead forever after.
+    //
+    // So the tallest column, which has no slack and is therefore packed,
+    // defines the grid, and every other section drops to the next position
+    // where its own first row lands on one of those rows.  The slack ends up
+    // distributed as whole rows, which is the only way it can be spent without
+    // taking the rows off the grid.
+    int total[kSectionColumns] = {};
+    for (int i = 0; i < n; ++i)
+        total[best[(size_t) i]] += tall[(size_t) i];
+
+    int ref = 0;
+    for (int c = 1; c < kSectionColumns; ++c)
+        if (total[c] > total[ref])
+            ref = c;
+
+    const int overhead = kSectionHeader + kSectionTopPad;
+    std::vector<int> rowTop;   // ascending, so the first match is the nearest
+    {
+        int y = 0;
+        for (int i = 0; i < n; ++i)
+            if (best[(size_t) i] == ref) {
+                const int rows = sections[i]->rowsNeeded(innerCols);
+                for (int k = 0; k < rows; ++k)
+                    rowTop.push_back(y + overhead + k * kControlHeight);
+                y += tall[(size_t) i];
+            }
+    }
+
+    int cursor[kSectionColumns] = {};
     placements.clear();
     for (int i = 0; i < n; ++i) {
         const int c = best[(size_t) i];
-        placements.push_back({ c, columnHeight[c], tall[(size_t) i] });
-        columnHeight[c] += tall[(size_t) i];
+        int y = cursor[c];
+        if (c != ref)
+            for (int row : rowTop) {
+                const int top = row - overhead;
+                // Never past the bottom of the panel: a section that cannot be
+                // snapped without overflowing stays where it was.
+                if (top >= cursor[c] && top + tall[(size_t) i] <= bestTallest) {
+                    y = top;
+                    break;
+                }
+            }
+        placements.push_back({ c, y, tall[(size_t) i] });
+        cursor[c] = y + tall[(size_t) i];
     }
 
     height = kHeaderHeight + 2 * kPad + bestTallest + kInfoBarHeight;
