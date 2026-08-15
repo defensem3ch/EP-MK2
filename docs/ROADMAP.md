@@ -757,6 +757,11 @@ Two things worth getting right, since a Rhodes is not a synth:
 **What shipped.** Depth in cents and rate in Hz, both in the Output section
 with the bend range. Depth defaults to 0, so it is off until asked for.
 
+**The mod wheel** (CC1) drives the depth parameter directly, as CC64 drives
+the sustain toggle, so the panel shows what the wheel is asking for. Full
+wheel is the full range, a semitone -- more than anyone plays, which is the
+right place for a maximum.
+
 **Per-voice phase, as above.** Each key takes its position in the cycle from
 the same hash that gives it its Q and its detune, so it is fixed for that key
 and a chord shimmers rather than swelling and falling as one object.

@@ -1259,6 +1259,46 @@ int main()
               "the pickup and the direct paths each carry part of it", rb);
     }
 
+    // ---- the mod wheel ----------------------------------------------------
+    // CC1 is vibrato, and it drives the *parameter* rather than sitting beside
+    // it -- so the panel shows what the wheel is asking for.  Same shape as
+    // CC64, which had the opposite bug: the parameter overwrote the pedal
+    // every block and a held pedal survived about 10 ms.
+    {
+        EpMk2Processor proc;
+        proc.setPlayConfigDetails(0, 2, 48000.0, 256);
+        proc.prepareToPlay(48000.0, 256);
+
+        auto depth = [&proc] {
+            auto* p = proc.getState().getParameter("vib_depth");
+            return p != nullptr ? p->convertFrom0to1(p->getValue()) : -1.0f;
+        };
+
+        juce::AudioBuffer<float> buf(2, 256);
+        auto send = [&](int value) {
+            juce::MidiBuffer m;
+            m.addEvent(juce::MidiMessage::controllerEvent(1, 1, value), 0);
+            buf.clear();
+            proc.processBlock(buf, m);
+        };
+
+        const float atRest = depth();
+        send(127);
+        const float wideOpen = depth();
+        // Several blocks, because the failure this guards against is a value
+        // that is written and then overwritten by the parameter table.
+        for (int i = 0; i < 8; ++i) { juce::MidiBuffer none; buf.clear(); proc.processBlock(buf, none); }
+        const float stillOpen = depth();
+        send(0);
+        const float shut = depth();
+
+        char mb[128];
+        snprintf(mb, sizeof mb, "  (rest %.0f, wheel up %.0f, 8 blocks later %.0f, down %.0f)",
+                 atRest, wideOpen, stillOpen, shut);
+        check(atRest == 0.0f && wideOpen > 90.0f && stillOpen == wideOpen && shut == 0.0f,
+              "the mod wheel drives vibrato depth, and it stays", mb);
+    }
+
     // ---- bend and vibrato -------------------------------------------------
     // Both move a note that is already sounding, which means re-deriving every
     // resonator on every voice while it rings.  The roadmap flagged two things

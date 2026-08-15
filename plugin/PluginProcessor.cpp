@@ -167,6 +167,15 @@ void EpMk2Processor::handleMidi(const juce::MidiMessage& m)
             p->setValueNotifyingHost(ccSustain ? 1.0f : 0.0f);
         updatePedal();
     }
+    else if (m.isController() && m.getControllerNumber() == 1) {
+        // The mod wheel is vibrato, as it is on everything else with one.
+        // Written into the parameter rather than kept beside it, exactly as
+        // CC64 is: the panel then shows what the wheel is asking for, and a
+        // control that does not move when the thing it represents moves is
+        // worse than no control at all.
+        if (auto* p = state.getParameter("vib_depth"))
+            p->setValueNotifyingHost((float) m.getControllerValue() / 127.0f);
+    }
     else if (m.isPitchWheel()) {
         // 0..16383 with 8192 at rest, and the two halves are not symmetrical:
         // 8192 units below centre against 8191 above.  Scaling by the larger
