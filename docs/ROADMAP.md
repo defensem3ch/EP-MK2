@@ -738,8 +738,8 @@ not ascend is refused rather than played.
 
 ### 4.6 The routing: what the pickup actually carries — **attempted, mostly rejected**
 
-`MODEL.md` calls the direct `Tone Level` and `Tine Level` paths unphysical, and
-they are: a real Rhodes is heard only through its pickup. The rework was to
+`MODEL.md` calls the direct `Tone Direct` and `Tine Direct` paths unphysical,
+and they are: a real Rhodes is heard only through its pickup. The rework was to
 remove them, feed the tine and tone bar into the pickup properly, and re-stage
 the drive. It was measured at every step and it did not work.
 
@@ -766,8 +766,19 @@ to.
 stage rather than after it. That is the right structure -- the drive means one
 thing rather than two -- and it fixes the non-monotonic behaviour where raising
 `Tine to Pickup` past a point gave *less* tine, because the tine was pushing
-the flux curve into saturation on its own. Its default moves from −77 dB to
-−20 dB, which is a level the pickup can actually carry.
+the flux curve into saturation on its own.
+
+Its default was moved to −20 dB at the same time, on the reasoning that this
+is a level the pickup can actually carry, and **that part was reverted**: −20
+sounded worse, and −77 dB is what ships. The structural change stands on its
+own; the level did not.
+
+**Since then:** `Tone to Pickup` exists (0 dB by default, which is what it was
+hard-wired at), so both of the tone bar's paths are controls, and the whole
+experiment above is now reachable from the panel -- `Tone Direct` and `Tine
+Direct` to −100, sends up -- without a rebuild. That makes the conclusion
+cheap to re-test rather than cheap to forget. It does not change the
+conclusion.
 
 **What would need to change for the rest.** The differentiator has to be
 opposed by something that is not a bigger excursion, since a bigger excursion
