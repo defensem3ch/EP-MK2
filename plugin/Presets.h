@@ -48,6 +48,26 @@ inline const std::vector<Preset>& table()
         // 0.8 where the harmonics sit evenly, and Q from the sample library.
         { "Rhodes MkI", {} },
 
+        // The same instrument played in, by ear rather than by measurement.
+        // Softer and shorter than the shipped defaults: the hammer contact is
+        // half again as long, so the tine modes are driven less hard and the
+        // attack is rounder; the tine rings about half as long and sits 5 dB
+        // further back; and the pickup is driven 1.5 dB harder to make that up.
+        // Bass Tilt comes down from the benchmarked 1.0, which trades a little
+        // evenness across the keyboard for less weight in the bottom octave.
+        //
+        // Hammer Level is the odd one: the raw blow is off by default because
+        // no real pickup sees the hammer, and at -51.5 dB it is not being used
+        // as a model of anything -- it is a thump under the attack.
+        { "Basic Rhodes", {
+            { "hammer_level",   -51.5f },
+            { "hammer_contact",   0.58f },
+            { "bass_tilt",        0.69f },
+            { "pickup_gain",     16.5f },
+            { "tine_level",     -20.0f },
+            { "tine_decay",     122.0f },
+        }},
+
         // Same instrument, brighter: a harder, shorter hammer contact excites
         // the tine modes further up, more tine reaches the pickup, the coil
         // rolls off later, and the tine sits nearer the magnetic axis where

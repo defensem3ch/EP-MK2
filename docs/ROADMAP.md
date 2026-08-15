@@ -114,7 +114,7 @@ sat permanently saturated.
 * The top octave loses its inharmonic content, because a 0.4 ms contact cannot
   excite 7.1× of 1760 Hz. Physically reasonable, but worth checking against the
   benchmark.
-* **The six factory presets were tuned against the old excitation** and want
+* **The factory presets were tuned against the old excitation** and want
   revisiting.
 
 ### 1.2 Sub-fundamental — **done, from measurement**
@@ -771,7 +771,7 @@ The second is the real answer and it is a larger piece of work than this was.
 * **Fitting the model to samples automatically** — parameter optimisation only
   makes sense once the structure is right. Fitting a model that lacks the 39.7
   mode just distorts the parameters it does have to compensate.
-* **Preset system beyond the six factory presets** — MK2 inherits Rhodes
+* **Preset system beyond the factory presets** — MK2 inherits Rhodes
   MkI/Bright, Wurlitzer, Clav, Vibraphone and Kalimba from MK1. Morphing
   between them, and user preset management, are still to do. Worth
   doing after §1.4, because the pickup change moves the main morph axis.
