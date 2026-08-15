@@ -94,15 +94,25 @@ jobs:
           #
           # .dSYM is excluded because macOS puts a file of the same name inside
           # the debug bundle, and that one is not the executable.
+          # Exact names, with an optional .exe -- never a trailing wildcard.
+          # A build tree is full of files named after the executable and next
+          # to it: EPMK2_tests.entitlements on macOS, epmk2-scaletest.exe.recipe
+          # on Windows.  A trailing * matched those and the script then tried
+          # to *run* them, which is a permission error on one platform and a
+          # shell syntax error on the other, neither of which mentions the
+          # actual mistake.
           find_tool() {
-            local found
-            found=$(find build -type f -iname "$1" ! -path '*.dSYM*' | head -1)
-            if [ -z "$found" ]; then
-              echo "no binary matching $1 under build/" >&2
-              find build -maxdepth 3 -type f -iname 'epmk2*' >&2
-              return 1
-            fi
-            echo "$found"
+            local base=$1 found
+            for name in "$base" "$base.exe"; do
+              found=$(find build -type f -iname "$name" ! -path '*.dSYM*' | head -1)
+              if [ -n "$found" ]; then
+                echo "$found"
+                return 0
+              fi
+            done
+            echo "no executable called $base or $base.exe under build/" >&2
+            find build -type f -iname 'epmk2*' ! -name '*.o' ! -name '*.obj' >&2
+            return 1
           }
           if [ "${{ matrix.name }}" = "linux" ]; then
             run() { xvfb-run -a "$@"; }
@@ -110,9 +120,9 @@ jobs:
             run() { "$@"; }
           fi
 
-          run "$(find_tool 'epmk2?tests*')"
-          "$(find_tool 'epmk2?scaletest*')"
-          "$(find_tool 'epmk2?claptest*')" "$(find build -name 'EP-MK2.clap' | head -1)"
+          run "$(find_tool 'epmk2?tests')"
+          "$(find_tool 'epmk2?scaletest')"
+          "$(find_tool 'epmk2?claptest')" "$(find build -name 'EP-MK2.clap' | head -1)"
 
       - name: Stage
         run: cmake --install build --config Release --prefix dist --component dist
