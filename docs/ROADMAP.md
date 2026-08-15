@@ -625,7 +625,7 @@ Two things worth getting right, since a Rhodes is not a synth:
 Neither is on the critical path for the physics, but both are needed before
 anyone would call this playable.
 
-### 4.3 Inline help on hover
+### 4.3 Inline help on hover — **done**
 
 37 controls, and several of them mean nothing without the physics behind them.
 `Pickup Offset` is the Rhodes-to-Wurlitzer axis and reads as an abstract
@@ -646,8 +646,9 @@ obscure the control being read, and it does not require hovering to be
 discovered. JUCE's `MouseListener` on each `ParamControl` is enough; there is
 no need for `TooltipWindow` and its timing behaviour.
 
-Worth doing before anyone else is asked to use this, because the controls are
-not self-explanatory and the physical model is the whole point of them.
+Built as described: a fixed strip along the bottom, fed by a `help` field in
+the parameter table so a control's explanation lives beside its range and
+default and cannot drift from them. All 44 carry one, which is asserted.
 
 ### 4.4 Mono / stereo tremolo — **done**
 
