@@ -128,6 +128,25 @@ target_link_libraries(EPMK2_tests
     PUBLIC  juce::juce_recommended_config_flags)
 
 # ---------------------------------------------------------------------------
+# Renders the editor to a PNG for the README, at the design size.
+juce_add_console_app(EPMK2_screenshot PRODUCT_NAME "epmk2-screenshot")
+
+target_sources(EPMK2_screenshot PRIVATE
+    tools/screenshot.cpp
+    plugin/PluginProcessor.cpp
+    plugin/PluginEditor.cpp
+    plugin/Parameters.cpp)
+
+target_compile_definitions(EPMK2_screenshot PUBLIC
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_STANDALONE_APPLICATION=1)
+
+target_link_libraries(EPMK2_screenshot
+    PRIVATE EPMK2_fonts juce::juce_audio_utils
+    PUBLIC  juce::juce_recommended_config_flags)
+
+# ---------------------------------------------------------------------------
 # Loads the built .clap the way a host would.  Separate from the main test
 # binary because it has to open the *artefact*, not link the code.
 add_executable(EPMK2_claptest tests/clap_load.cpp)
