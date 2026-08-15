@@ -1386,7 +1386,9 @@ int main()
             // throughout.  So: every label must fit at full size, in at most
             // two lines, in the width it has.
             {
-                const juce::Font labelFont(juce::FontOptions(15.0f, juce::Font::bold));
+                // The panel's own font, not an approximation of it: the
+                // width being checked here is the width that font produces.
+                const juce::Font labelFont(panelLabelFont());
                 auto widthOf = [&](const juce::String& t) {
                     return juce::GlyphArrangement::getStringWidthInt(labelFont, t);
                 };

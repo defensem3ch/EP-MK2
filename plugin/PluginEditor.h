@@ -71,6 +71,12 @@ private:
 // Bigger, bolder type than JUCE's defaults, applied to the whole panel so the
 // value boxes inside sliders pick it up too -- those draw through a Label the
 // slider owns, so setting a font on the slider does not reach them.
+// The font the panel draws control names in.  Exposed because the panel's
+// whole width is derived from how wide the longest name is in it, so a test
+// has to measure the font that is actually drawn -- approximating it with the
+// system default measured a font the plugin no longer uses anywhere.
+juce::Font panelLabelFont();
+
 struct PanelLookAndFeel : juce::LookAndFeel_V4
 {
     juce::Font getLabelFont(juce::Label&) override;
@@ -140,7 +146,7 @@ public:
     // and narrow, which is the wrong shape for a screen.
     // Set by the type, not chosen: three columns of four controls at the
     // width the longest name needs on one line.  See kControlWidth.
-    static constexpr int kDesignWidth  = 1740;
+    static constexpr int kDesignWidth  = 1840;
     // Height comes from the panel's contents; see PanelContent::designHeight.
     int designHeight = 0;
 

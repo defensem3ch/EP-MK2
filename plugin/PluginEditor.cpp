@@ -10,12 +10,13 @@ using namespace epmk2::params;
 
 namespace {
 // Wide enough that no name has to wrap: the longest, "Hammer to Pickup", is
-// 132px on one line, and a control gives its name four pixels less than its
-// own width.  Everything about how the names sit follows from that -- one line
-// of name instead of two, the name against its own knob, and no ragged line
-// starts along a row.  It is what sets the design width.
-constexpr int kControlWidth  = 137;
-constexpr int kControlHeight = 149;   // see the breakdown below
+// 141px on one line at kLabelFont, and a control gives its name four pixels
+// less than its own width.  Everything about how the names sit follows from
+// that -- one line of name instead of two, the name against its own knob, and
+// no ragged line starts along a row.  It is what sets the design width, so
+// raising kLabelFont widens the whole panel.  The test below measures it.
+constexpr int kControlWidth  = 146;
+constexpr int kControlHeight = 141;   // see the breakdown below
 constexpr int kSectionHeader = 30;
 constexpr int kHeaderHeight  = 56;
 
@@ -54,12 +55,12 @@ inline juce::FontOptions panelFont(float height, int style = juce::Font::bold)
 
 // Type sizes, in one place.  Everything is bold: at panel scale a regular
 // weight on a dark background is hard to read at a glance while playing.
-constexpr float kLabelFont   = 15.0f;
-constexpr float kSectionFont = 17.0f;
-constexpr float kTitleFont   = 30.0f;
-constexpr float kValueFont   = 16.0f;
-constexpr float kCreditFont  = 12.0f;
-constexpr float kInfoFont    = 14.0f;
+constexpr float kLabelFont   = 16.0f;
+constexpr float kSectionFont = 19.0f;
+constexpr float kTitleFont   = 32.0f;
+constexpr float kValueFont   = 18.0f;
+constexpr float kCreditFont  = 13.0f;
+constexpr float kInfoFont    = 16.0f;
 // How far the glow reaches past the lamp, as a multiple of its radius.  The
 // lamp is sized so that lamp + glow exactly fills its component.
 constexpr float kGlowReach   = 1.9f;
@@ -99,15 +100,15 @@ inline void fillVertical(juce::Graphics& g, juce::Rectangle<float> r,
                                            false));
 }
 // What a control's height is made of.  The knob is drawn into the square that
-// fits its box, so at 137px wide the box's *height* is what sets the knob's
-// size -- it was 47, and a 43px knob in a 137px cell reads as a small object
-// in a large space.  72 puts the knob at about half the cell's width.
+// fits its box, so at this width the box's *height* is what sets the knob's
+// size.  47 left a knob adrift in its cell and 72 was a dial with a caption;
+// 58 is between them, and reads as a control with a name on it.
 //
 // These have to add up to kControlHeight, which is asserted below.
-constexpr int   kLabelArea   = 18;   // one line of name, all any of them needs
+constexpr int   kLabelArea   = 21;   // one line of name, all any of them needs
 constexpr int   kKnobTop     = 5;    // so the knob is not against its name
-constexpr int   kKnobArea    = 72;   // the square the knob is drawn into
-constexpr int   kValueBox    = 24;   // the slider's own text box
+constexpr int   kKnobArea    = 58;   // the square the knob is drawn into
+constexpr int   kValueBox    = 27;   // the slider's own text box
 constexpr int   kRowGap      = 30;   // air before the next row's name
 static_assert(kLabelArea + kKnobTop + kKnobArea + kValueBox + kRowGap
                   == kControlHeight,
@@ -144,7 +145,7 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
             juce::AudioProcessorValueTreeState::ButtonAttachment>(tree, spec.id, button);
     } else {
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 88, kValueBox);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 110, kValueBox);
         // No suffix or decimal count here: the parameter's own
         // stringFromValue supplies both, and setting them again doubles the
         // unit ("0.0 dB dB").
@@ -309,6 +310,11 @@ void ParamSection::resized()
 juce::Font PanelLookAndFeel::getLabelFont(juce::Label&)
 {
     return juce::Font(panelFont(kValueFont));
+}
+
+juce::Font panelLabelFont()
+{
+    return juce::Font(panelFont(kLabelFont));
 }
 
 juce::Typeface::Ptr PanelLookAndFeel::getTypefaceForFont(const juce::Font& f)
