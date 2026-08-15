@@ -261,10 +261,15 @@ because removing it has not been tested rather than because it earns its place.
 
 The direct `toneLevel` and `tineLevel` paths are not physical: a real Rhodes is
 heard only through its pickup. They are how the Pd model got a fundamental when
-its pickup path was too weak to supply one, and they remain because the balance
-still depends on them. Cutting them flattens the keyboard further but collapses
-the tine, since `Tine to Pickup` is far too low for the pickup to carry it
-alone. That routing is the next structural question (roadmap 1.4).
+its pickup path was too weak to supply one, and they remain because **the
+keyboard's evenness depends on them** -- they carry the fundamental without
+passing through the pickup's differentiator, which is the only thing opposing
+its +6 dB/octave.
+
+Removing them was tried and measured, and made the instrument worse: the spread
+across the keyboard went from 13.1 dB to 15.1, and to 33 dB with the pickup's
+input bound removed as well. See roadmap 4.6 for what would have to change
+first.
 
 The engine sums the voices, halves, applies master, and then splits into two
 channels at the tremolo — the only stereo stage. Everything after it is per

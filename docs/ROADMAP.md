@@ -694,6 +694,47 @@ state.
 Worth doing: `Divisions` and `Interval` already say this instrument is not
 meant to be stuck in 12-equal, and an unequal scale is the obvious next step.
 
+### 4.6 The routing: what the pickup actually carries — **attempted, mostly rejected**
+
+`MODEL.md` calls the direct `Tone Level` and `Tine Level` paths unphysical, and
+they are: a real Rhodes is heard only through its pickup. The rework was to
+remove them, feed the tine and tone bar into the pickup properly, and re-stage
+the drive. It was measured at every step and it did not work.
+
+| | keyboard spread | tine at note 45 |
+| --- | --- | --- |
+| as it was | 13.1 dB | −25.9 dB |
+| pickup only | 15.1 dB | −19.7 dB |
+| pickup only, no `tanh` bound | 33 dB | **+9.4 dB at note 21** |
+
+The direct paths were doing real work: they carry the fundamental *without*
+passing through the differentiator, and that is what keeps the keyboard even.
+Removing them leaves the pickup's inherent +6 dB/octave with nothing opposing
+it, and `Bass Tilt` cannot make up the difference -- driving the pickup harder
+in the bass only pushes it further into saturation, so the compensation cancels
+itself.
+
+Removing the `tanh` bound as well, on the reasoning that the flux curve is its
+own limit, was worse again: the bass ran out into the tail of the curve where
+flux barely changes, so the fundamental collapsed while the harmonics grew and
+at the bottom of the keyboard the tine came out *above* the note it belonged
+to.
+
+**Kept from the attempt:** the tine now enters the pickup *before* the drive
+stage rather than after it. That is the right structure -- the drive means one
+thing rather than two -- and it fixes the non-monotonic behaviour where raising
+`Tine to Pickup` past a point gave *less* tine, because the tine was pushing
+the flux curve into saturation on its own. Its default moves from −77 dB to
+−20 dB, which is a level the pickup can actually carry.
+
+**What would need to change for the rest.** The differentiator has to be
+opposed by something that is not a bigger excursion, since a bigger excursion
+saturates. That means either compensating after the pickup rather than before
+it -- which is honest as a tone control but not as physics -- or modelling the
+tine's displacement in real units so that the geometry, the excursion and the
+drive are all calibrated against each other rather than tuned independently.
+The second is the real answer and it is a larger piece of work than this was.
+
 ## Deliberately not doing yet
 
 * **CLAP** — wanted, and MK1 will get it first; nothing here depends on it.

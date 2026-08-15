@@ -56,14 +56,12 @@ struct VoiceParams {
     // existed.  Physically this should be positive; the value wants measuring
     // off the sample benchmark rather than guessing, so it defaults to off.
     float tineModeDamping = 0.0f;
-// -6 dB.  Through the range the samples can actually resolve -- notes
-    // 49 to 85 -- the model's tine sat within a few dB of the instrument and
-    // fell with pitch at much the same rate, so no pitch scaling is wanted.
-    // What it was is too hot in the bass, where a 120 ms analysis window at
-    // 39 Hz is five cycles and the measurement cannot say anything useful.
-    // This is a judgement by ear, with the measurable range as a sanity check.
+// Direct bleed to the output, bypassing the pickup entirely.  Off: a
+    // Rhodes is heard *through* its pickup, and these paths only exist because
+    // the Pd model's pickup was too weak to carry a fundamental on its own.
+    // Kept as tone controls, not as part of the signal path.
     float tineLevelLin = 0.5012f;
-    float tineSendLin = 0.000141f;   // -77 dB
+    float tineSendLin = 0.1f;        // -20 dB
 
     // tone bar
     // Q of the fundamental *at the reference note* (A4), measured from the
@@ -398,15 +396,21 @@ public:
         tineRaw *= kResonatorTrim;
 
         // --- pickup --------------------------------------------------------
-        const float pickupIn = (strike * p.pickupAttackLin + toneRaw + subRaw)
-                                   * p.pickupGainLin
-                             + tineRaw * p.tineSendLin;
+        // Everything the pickup can see is metal moving in front of it: the
+        // tine directly, and the tone bar it is clamped beside.  Both enter
+        // *before* the drive stage, so the drive means one thing rather than
+        // two.  The tine used to be added after it, which is why raising its
+        // send eventually gave less tine rather than more -- past a point it
+        // was pushing the flux curve into saturation on its own.
+        const float pickupIn = (toneRaw + subRaw
+                              + tineRaw * p.tineSendLin
+                              + strike * p.pickupAttackLin) * p.pickupGainLin;
 
-        // The tine's excursion is bounded -- it cannot pass through the pickup
-        // -- and tanh is a reasonable bound.  What comes out is displacement.
-        // std::tanh rather than the Padé approximant used elsewhere: this feeds
-        // a differentiator, which would put the approximant's curvature
-        // mismatch straight into the audio.
+        // Bounded before the flux table.  Without it the bass ran out into the
+        // tail of the curve, where flux barely changes -- so the fundamental
+        // collapsed while the harmonics grew, and at the bottom of the
+        // keyboard the tine came out 9 dB *above* the note.  The tine's
+        // excursion really is bounded; this is where that is said.
         const float disp = std::tanh(pickupIn);
         // Flux linking the coil, from the pickup geometry.
         const float flux = shaper.process(disp);
