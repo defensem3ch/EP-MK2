@@ -109,7 +109,7 @@ public:
         voiceLast.fill(0.0f);
         rngState = 0x9E3779B9u;
         dcBlockX1 = dcBlockY1 = dcBlockX1R = dcBlockY1R = 0.0f;
-        dcBlockCoeff = float(1.0 - 2.0 * M_PI * 5.0 / sr);   // hip~ 5
+        dcBlockCoeff = float(1.0 - 2.0 * kPi * 5.0 / sr);   // hip~ 5
     }
 
     // A loaded scale if there is one, otherwise the patch's own tuning:
@@ -284,7 +284,7 @@ public:
             if (vibrato) {
                 const float phase = vibratoPhase + voices[i].vibratoPhaseOffset();
                 cents += p.vibratoDepthCents
-                       * std::sin(2.0f * float(M_PI) * phase);
+                       * std::sin(2.0f * float(kPi) * phase);
             }
             voices[i].retune(p.voice, std::pow(2.0f, cents / 1200.0f));
         }
@@ -388,7 +388,7 @@ private:
         tremoloPhase += float(p.tremoloRateHz / sampleRate);
         if (tremoloPhase >= 1.0f) tremoloPhase -= 1.0f;
 
-        const float sine = 0.5f * std::cos(2.0f * float(M_PI) * tremoloPhase) + 0.5f;
+        const float sine = 0.5f * std::cos(2.0f * float(kPi) * tremoloPhase) + 0.5f;
         const float tri  = 2.0f * std::fabs(tremoloPhase - 0.5f);
         const float blend = std::min(1.0f, std::max(0.0f, p.tremoloShape / 127.0f));
         const float lfo = sine * (1.0f - blend) + tri * blend;

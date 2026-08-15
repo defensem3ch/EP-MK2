@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
+# M_PI is POSIX, not standard C++, and MSVC's <cmath> withholds it without
+# this.  The DSP defines its own constant and does not need it; the tests
+# still use M_PI, and this is for them.
+add_compile_definitions(_USE_MATH_DEFINES)
+
 project(EPMK2 VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)

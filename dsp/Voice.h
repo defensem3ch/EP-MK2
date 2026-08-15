@@ -184,7 +184,7 @@ public:
         // ~50 ms peak-follower release.
         envelopeDecay = float(std::exp(-1.0 / (0.05 * sr)));
         // Unity at A4 for the dPhi/dt differentiator.
-        inducedGain = float(sr / (2.0 * M_PI * 440.0));
+        inducedGain = float(sr / (2.0 * kPi * 440.0));
         // The resonators sum their input sample by sample, but the strike is
         // defined in seconds -- so a higher sample rate puts more samples under
         // the same pulse and drives them proportionally harder.  The excitation
@@ -652,7 +652,7 @@ private:
     // [*~ 0.5] -> [+~ 0.75] -> [cos~], and cos~ takes its phase in cycles.
     static inline float raisedCosine(float ramp) noexcept
     {
-        return std::cos(2.0f * float(M_PI) * (0.75f + 0.5f * ramp));
+        return std::cos(2.0f * float(kPi) * (0.75f + 0.5f * ramp));
     }
 
     double sampleRate = 48000.0;

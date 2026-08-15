@@ -14,6 +14,13 @@
 
 namespace epmk2 {
 
+// Our own, because kPi is not standard: it comes from POSIX, and MSVC's
+// <cmath> does not define it unless _USE_MATH_DEFINES is set before the
+// include.  Relying on a build-system define to make the DSP compile is
+// exactly the kind of thing that works everywhere it has been tried and
+// fails on the first machine that has not.
+inline constexpr double kPi = 3.14159265358979323846;
+
 struct BiquadCoeffs {
     float ff1 = 1.0f, ff2 = 0.0f, ff3 = 0.0f;   // feed-forward  (b0, b1, b2)
     float fb1 = 0.0f, fb2 = 0.0f;               // feedback      (-a1, -a2)
@@ -55,7 +62,7 @@ inline BiquadCoeffs designBandpass(double freqHz, double q, double sampleRate) n
     if (freqHz > 20000.0) freqHz = 20000.0;
     if (q < 1.0e-6)       q = 1.0e-6;
 
-    const double w0    = 2.0 * M_PI * freqHz / sampleRate;
+    const double w0    = 2.0 * kPi * freqHz / sampleRate;
     const double sinw0 = std::sin(w0);
     const double cosw0 = std::cos(w0);
     const double alpha = sinw0 / (2.0 * q);
@@ -126,7 +133,7 @@ struct Cookbook {
         if (freqHz > nyquist)   freqHz = nyquist;
         if (q < 5.96046e-08)    q = 5.96046e-08;
 
-        const double w0 = 2.0 * M_PI * freqHz / sampleRate;
+        const double w0 = 2.0 * kPi * freqHz / sampleRate;
         sinw0 = std::sin(w0);
         cosw0 = std::cos(w0);
         alpha = sinw0 / (2.0 * q);
@@ -171,7 +178,7 @@ class OnePole {
 public:
     void setCutoff(double freqHz, double sampleRate) noexcept
     {
-        double c = 2.0 * M_PI * freqHz / sampleRate;
+        double c = 2.0 * kPi * freqHz / sampleRate;
         if (c < 0.0) c = 0.0;
         if (c > 1.0) c = 1.0;
         coeff = float(c);
