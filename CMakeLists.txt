@@ -77,3 +77,23 @@ target_compile_definitions(EPMK2_playmidi PUBLIC
 target_link_libraries(EPMK2_playmidi
     PRIVATE juce::juce_audio_utils juce::juce_audio_formats
     PUBLIC  juce::juce_recommended_config_flags)
+
+# ---------------------------------------------------------------------------
+# Renders the model on the reference library's own grid of pitches and
+# velocities, so both can go through the same analysis.
+juce_add_console_app(EPMK2_bank PRODUCT_NAME "epmk2-bank")
+
+target_sources(EPMK2_bank PRIVATE
+    tests/render_bank.cpp
+    plugin/PluginProcessor.cpp
+    plugin/PluginEditor.cpp
+    plugin/Parameters.cpp)
+
+target_compile_definitions(EPMK2_bank PUBLIC
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_STANDALONE_APPLICATION=1)
+
+target_link_libraries(EPMK2_bank
+    PRIVATE juce::juce_audio_utils juce::juce_audio_formats
+    PUBLIC  juce::juce_recommended_config_flags)
