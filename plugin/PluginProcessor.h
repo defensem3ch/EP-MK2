@@ -42,13 +42,9 @@ public:
 
     juce::AudioProcessorValueTreeState& getState() noexcept { return state; }
 
-    // Editor size is remembered in two places, and they answer different
-    // questions.  The value tree travels with the session, so reopening a
-    // saved project restores the window it was saved with.  A settings file in
-    // the user's config directory outlives every instance, so *adding a fresh
-    // instance* gets the size last used rather than the factory default --
-    // which the value tree alone cannot do, because a new instance has no
-    // state to restore from.  Session state wins where both exist.
+    // Editor size lives in a settings file in the user's config directory,
+    // not in the session: it outlives every instance, so a freshly added one
+    // opens at the size last used rather than the factory default.
     juce::Point<int> getSavedEditorSize() const;
     void saveEditorSize(int width, int height);
     // Write the settings file now.  Resizes are batched behind a timer, which

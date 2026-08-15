@@ -76,25 +76,18 @@ void EpMk2Processor::flushSettings()
 
 juce::Point<int> EpMk2Processor::getSavedEditorSize() const
 {
-    // Session state first: a project saved at a particular size should reopen
-    // at it, whatever the user has done to other instances since.
-    const juce::Point<int> fromSession {
-        (int) state.state.getProperty("editorWidth", 0),
-        (int) state.state.getProperty("editorHeight", 0) };
-    if (fromSession.x > 0 && fromSession.y > 0)
-        return fromSession;
-
-    // Otherwise the last size used anywhere, so a fresh instance opens the way
-    // the last one was left.
+    // The settings file is the only source.  This used to prefer a size stored
+    // in the session state, on the reasoning that a project saved at a
+    // particular size should reopen at it -- but a host applying *any* state
+    // to a freshly added instance then overrode the user's actual preference,
+    // and a new instance opened at the default no matter what had been stored.
+    //
+    // A window size is a property of the person, not of the piece of music.
     return settings->editorSize();
 }
 
 void EpMk2Processor::saveEditorSize(int width, int height)
 {
-    // No undo manager: a window resize is not an edit the user wants to undo
-    // through the parameter history.
-    state.state.setProperty("editorWidth", width, nullptr);
-    state.state.setProperty("editorHeight", height, nullptr);
     settings->setEditorSize(width, height);
 }
 
@@ -122,12 +115,13 @@ void EpMk2Processor::handleMidi(const juce::MidiMessage& m)
         engine.noteOn(m.getNoteNumber(), m.getVelocity(), params);
     else if (m.isNoteOff())
         engine.noteOff(m.getNoteNumber(), params);
-    else if (m.isSustainPedalOn()) {
-        ccSustain = true;
-        updatePedal();
-    }
-    else if (m.isSustainPedalOff()) {
-        ccSustain = false;
+    else if (m.isSustainPedalOn() || m.isSustainPedalOff()) {
+        ccSustain = m.isSustainPedalOn();
+        // Drive the panel's toggle too, so the lamp shows the pedal's real
+        // state.  A control that does not move when the thing it represents
+        // moves is worse than no control at all.
+        if (auto* p = state.getParameter("sustain"))
+            p->setValueNotifyingHost(ccSustain ? 1.0f : 0.0f);
         updatePedal();
     }
     else if (m.isAllNotesOff())

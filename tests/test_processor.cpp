@@ -1157,20 +1157,17 @@ int main()
     }
 
     // ---- the window remembers its size -----------------------------------
-    // Two different questions, and the first implementation only answered one.
-    // Storing the size in the value tree makes a *saved session* reopen at its
-    // size, but a freshly added instance has no state to restore from and so
-    // fell back to the factory default -- which is exactly what happens when
-    // someone resizes a window, removes the plugin, and adds it again.
+    // Across instances and across installs, which means the settings file is
+    // the only source.  Storing it in the session state as well seemed
+    // harmless and was not: session state took priority, so any state a host
+    // applied to a freshly added instance -- a default preset, an empty tree,
+    // anything -- overrode the size the user had actually chosen, and a new
+    // instance opened at the factory default however many times it was set.
     {
         juce::ScopedJuceInitialiser_GUI juceInit;
         int w = 0, h = 0;
         {
             std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
-            // Size from the *design* size, not from whatever happens to be
-            // stored: scaling up whatever the last run left eventually exceeds
-            // the maximum, and a size outside the limits is refused on reload
-            // -- correctly -- which then reads as a failure of the storage.
             auto* e = dynamic_cast<EpMk2Editor*>(ed.get());
             w = EpMk2Editor::kDesignWidth * 5 / 4;
             h = e != nullptr ? e->designHeightForTest() * 5 / 4 : ed->getHeight();
@@ -1179,37 +1176,7 @@ int main()
             h = ed->getHeight();
         }
 
-        // 1. A saved session reopens at the size it was saved with.
-        juce::MemoryBlock blob;
-        proc.getStateInformation(blob);
-        proc.setStateInformation(blob.getData(), (int) blob.getSize());
-        {
-            std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
-            char d[96];
-            snprintf(d, sizeof d, "  (%d x %d -> %d x %d)",
-                     w, h, ed->getWidth(), ed->getHeight());
-            check(std::abs(ed->getWidth() - w) <= 2 && std::abs(ed->getHeight() - h) <= 2,
-                  "a saved session reopens at its own size", d);
-        }
-
-        // 2. A stored size from an older layout still restores.  The design
-        //    size changes whenever the panel does, so a stored height from a
-        //    previous build will not match the current aspect ratio -- and
-        //    used to be rejected outright, dropping every update back to the
-        //    default size.  Width is what carries over.
-        {
-            proc.saveEditorSize(w, h * 3 / 2);       // as if the layout had changed
-            std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
-            char d[96];
-            snprintf(d, sizeof d, "  (asked %d x %d, got %d x %d)",
-                     w, h * 3 / 2, ed->getWidth(), ed->getHeight());
-            check(std::abs(ed->getWidth() - w) <= 2,
-                  "a size stored by an older layout still restores", d);
-            proc.saveEditorSize(w, h);
-        }
-
-        // 3. A brand new instance, with no state at all, opens at the size the
-        //    last one was left -- this is the case that was broken.
+        // A brand new instance, sharing nothing with this one but the settings.
         {
             EpMk2Processor fresh;
             fresh.setPlayConfigDetails(0, 2, sr, block);
@@ -1218,18 +1185,64 @@ int main()
             char d[96];
             snprintf(d, sizeof d, "  (%d x %d -> %d x %d)",
                      w, h, ed->getWidth(), ed->getHeight());
-            check(std::abs(ed->getWidth() - w) <= 2 && std::abs(ed->getHeight() - h) <= 2,
-                  "a fresh instance opens at the last size used", d);
+            check(std::abs(ed->getWidth() - w) <= 2,
+                  "a new instance opens at the last size used", d);
         }
 
-        // Leave the stored preference at the design size.  Without this the
-        // size ratchets up every run, since each run scales the last one by
-        // 5/4 -- and later checks would start from whatever it reached.
+        // A host handing the plugin a state must not undo that.  This is the
+        // case that was broken: adding an instance to a project reset it.
+        {
+            EpMk2Processor fresh;
+            fresh.setPlayConfigDetails(0, 2, sr, block);
+            fresh.prepareToPlay(sr, block);
+            juce::MemoryBlock blob;
+            fresh.getStateInformation(blob);
+            fresh.setStateInformation(blob.getData(), (int) blob.getSize());
+            std::unique_ptr<juce::AudioProcessorEditor> ed(fresh.createEditor());
+            char d[96];
+            snprintf(d, sizeof d, "  (%d x %d -> %d x %d)",
+                     w, h, ed->getWidth(), ed->getHeight());
+            check(std::abs(ed->getWidth() - w) <= 2,
+                  "restoring a session does not reset the window", d);
+        }
+
+        // A size stored by an older layout still restores: the design size
+        // changes whenever the panel does, so the stored height will not match
+        // the current aspect ratio.  Width is what carries over.
+        {
+            proc.saveEditorSize(w, h * 3 / 2);
+            std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
+            char d[96];
+            snprintf(d, sizeof d, "  (asked %d x %d, got %d x %d)",
+                     w, h * 3 / 2, ed->getWidth(), ed->getHeight());
+            check(std::abs(ed->getWidth() - w) <= 2,
+                  "a size stored by an older layout still restores", d);
+        }
+
+        // Leave the preference at the design size.
         {
             std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
             if (auto* e = dynamic_cast<EpMk2Editor*>(ed.get()))
                 e->setSize(EpMk2Editor::kDesignWidth, e->designHeightForTest());
         }
+    }
+
+    // ---- CC64 shows on the panel -----------------------------------------
+    {
+        auto* pedal = proc.getState().getParameter("sustain");
+        pedal->setValueNotifyingHost(0.0f);
+
+        juce::MidiBuffer down;
+        down.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
+        renderPeak(proc, down, 1, block);
+        const bool litByCC = pedal->getValue() > 0.5f;
+
+        juce::MidiBuffer up;
+        up.addEvent(juce::MidiMessage::controllerEvent(1, 64, 0), 0);
+        renderPeak(proc, up, 1, block);
+        const bool darkAfter = pedal->getValue() < 0.5f;
+
+        check(litByCC && darkAfter, "CC64 moves the panel's sustain control");
     }
 
     // The editor exists so hosts do not fall back to a generic view of JUCE's
