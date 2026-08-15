@@ -124,6 +124,23 @@ cmake --build build --target EPMK2_playmidi
 ./build/EPMK2_playmidi_artefacts/Release/EPMK2_playmidi performance.mid --out render.wav
 ```
 
+## Installing a build
+
+Builds are produced for Linux, Windows and macOS as VST3, LV2, CLAP and a
+standalone application. Copy the format you want into wherever your host
+looks for it.
+
+**On macOS the builds are not signed or notarised**, so the first time you
+open one, Gatekeeper will say it cannot be checked for malicious software.
+Right-click the plugin or app and choose Open, and confirm — after that it
+opens normally. This is not a warning about the plugin; it is what macOS says
+about anything from a developer who has not paid Apple's yearly fee, and there
+is no fee-free way to remove it.
+
 ## Licence
 
 GPL-3.0, inherited from EP-MK1. See `LICENSE`.
+
+Liberation Sans is embedded in the binary, under the SIL Open Font License
+1.1. See `resources/fonts/LICENSE-Liberation.txt`, which ships alongside
+every build.

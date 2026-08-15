@@ -948,9 +948,12 @@ formats beside `LICENSE` and the font's `LICENSE-Liberation.txt` -- the
 latter is not optional, since Liberation Sans is embedded in every binary
 and the OFL requires its text to travel with the software.
 
-**Still not done: codesigning and notarisation on macOS.** Without them
-users get a Gatekeeper warning and have to right-click-open. That needs an
-Apple Developer account, so it is a decision rather than a build step.
+**Decided against: codesigning and notarisation on macOS.** It needs an
+Apple Developer account at $99 a year, and there is no fee-free way to remove
+the Gatekeeper dialog. For a free GPL-3 plugin that is not worth it, so the
+builds ship unsigned and the README tells macOS users to right-click-open
+rather than assume the download is broken. Revisit only if it turns into a
+support burden.
 
 ## Deliberately not doing yet
 
