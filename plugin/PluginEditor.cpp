@@ -154,9 +154,10 @@ static_assert(EpMk2Editor::kDesignWidth
 
 //==============================================================================
 ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec& spec)
-    : label(spec.panelName()), help(spec.help), isToggle(spec.unit == Unit::Toggle)
+    : label(spec.panelName()), fullName(spec.name), help(spec.help),
+      isToggle(spec.unit == Unit::Toggle)
 {
-    setName(spec.panelName());
+    setName(spec.name);
     if (isToggle) {
         button.setColour(juce::ToggleButton::tickColourId,
                          sectionColour(spec.section).withMultipliedSaturation(1.15f));
@@ -191,7 +192,7 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
 void ParamControl::mouseEnter(const juce::MouseEvent&)
 {
     if (auto* panel = findParentComponentOfClass<PanelContent>())
-        panel->showHelp(label, help);
+        panel->showHelp(fullName, help);
 }
 
 void ParamControl::mouseExit(const juce::MouseEvent&)

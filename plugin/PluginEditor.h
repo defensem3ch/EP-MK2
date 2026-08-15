@@ -22,8 +22,18 @@ public:
     void mouseEnter(const juce::MouseEvent&) override;
     void mouseExit(const juce::MouseEvent&) override;
 
+    // The two names, so a test can check they are wired to the right places:
+    // the short one is drawn, the full one is what the info bar reports.
+    const juce::String& drawnName() const { return label; }
+    const juce::String& infoName()  const { return fullName; }
+
 private:
+    // What the panel draws, and what the info bar says.  They differ wherever
+    // a name had to be shortened to keep the panel narrow: the control shows
+    // "Distance", the bar names it "Pickup Distance", so the abbreviation
+    // never has to be guessed at.
     juce::String label;
+    juce::String fullName;
     juce::String help;
     bool isToggle;
 

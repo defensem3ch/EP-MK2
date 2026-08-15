@@ -1419,6 +1419,47 @@ int main()
                 check(worstOver == 0, "every name fits on one line, unsquashed", lb);
             }
 
+            // A shortened name has to be recoverable.  The panel says
+            // "Distance" because it is only as wide as its longest name; the
+            // info bar has a whole strip and says "Pickup Distance", so the
+            // abbreviation never has to be guessed at.
+            {
+                int wrongName = 0, shortened = 0;
+                juce::String offender;
+                std::function<void(juce::Component*)> names = [&](juce::Component* comp) {
+                    for (int k = 0; k < comp->getNumChildComponents(); ++k) {
+                        auto* child = comp->getChildComponent(k);
+                        if (auto* pc = dynamic_cast<ParamControl*>(child)) {
+                            const auto& all = epmk2::params::table();
+                            auto sp = std::find_if(all.begin(), all.end(),
+                                [&](const epmk2::params::Spec& s) {
+                                    return pc->infoName() == s.name; });
+                            if (sp == all.end()) {
+                                ++wrongName;
+                                offender = pc->infoName();
+                            } else {
+                                if (pc->drawnName() != juce::String(sp->panelName())) {
+                                    ++wrongName;
+                                    offender = pc->infoName();
+                                }
+                                if (pc->drawnName() != pc->infoName())
+                                    ++shortened;
+                            }
+                        }
+                        names(child);
+                    }
+                };
+                names(ed.get());
+                char nb[128];
+                snprintf(nb, sizeof nb, "  (%d shortened, %d wrong%s%s)",
+                         shortened, wrongName, wrongName ? ": " : "",
+                         wrongName ? offender.toRawUTF8() : "");
+                // The second half keeps this honest: if nothing were ever
+                // shortened the first half would pass while proving nothing.
+                check(wrongName == 0 && shortened > 0,
+                      "the info bar gives a shortened name in full", nb);
+            }
+
             // Rows of knobs must line up across the panel's three columns.
             // They are laid out per section, so nothing makes them agree by
             // construction: a section that starts at a different height, or a
