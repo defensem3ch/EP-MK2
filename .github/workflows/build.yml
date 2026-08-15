@@ -1,0 +1,88 @@
+name: build
+
+# Windows and macOS builds are the whole point of this file: VST3, AU and CLAP
+# all have to be compiled on the platform they run on, so there is no way to
+# produce them from the Linux machine this is developed on.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing should not cancel the others: when a build breaks
+      # it is usually platform-specific, and seeing which ones survived is
+      # most of the diagnosis.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux
+          - os: windows-latest
+            name: windows
+          - os: macos-14
+            name: macos
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # JUCE needs these to build anything with a GUI on Linux, and the list
+      # is unforgiving: a missing one fails deep in a JUCE header rather than
+      # at configure time.
+      - name: Linux dependencies
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev \
+            libxrandr-dev libxrender-dev libglu1-mesa-dev mesa-common-dev \
+            libcurl4-openssl-dev xvfb ninja-build
+
+      - name: Configure
+        # A universal binary on macOS: an Apple Silicon runner would otherwise
+        # produce an arm64-only plugin, which will not load in an Intel host.
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          ${{ matrix.name == 'macos' && '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64' || '' }}
+          ${{ matrix.name == 'linux' && '-G Ninja' || '' }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      # The editor tests need a display.  The Windows and macOS runners have
+      # one; Linux does not, hence xvfb.
+      #
+      # Loading the built .clap is a different claim from producing it, and it
+      # is the one that fails when a wrapper is wired up wrong on a platform
+      # nobody has built on before.
+      - name: Test
+        shell: bash
+        run: |
+          set -euo pipefail
+          find_tool() { find build -type f -name "$1" -perm -u+x | head -1; }
+          if [ "${{ matrix.name }}" = "linux" ]; then
+            run() { xvfb-run -a "$@"; }
+          else
+            run() { "$@"; }
+          fi
+
+          run "$(find_tool 'epmk2-tests*')"
+          "$(find_tool 'epmk2-scaletest*')"
+          "$(find_tool 'epmk2-claptest*')" "$(find build -name 'EP-MK2.clap' | head -1)"
+
+      - name: Stage
+        run: cmake --install build --config Release --prefix dist --component dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EP-MK2-${{ matrix.name }}
+          path: dist/
+          if-no-files-found: error

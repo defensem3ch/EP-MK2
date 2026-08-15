@@ -80,6 +80,35 @@ target_link_libraries(EPMK2
         juce::juce_recommended_warning_flags)
 
 # ---------------------------------------------------------------------------
+# Packaging.  `cmake --install build --prefix dist --component dist` stages
+# the built plugins beside the licences that have to travel with them.
+#
+# A component, because JUCE installs itself -- its headers, its tools and its
+# CMake package files -- and none of that belongs in a plugin download.
+#
+# The font's is not optional: Liberation Sans is embedded in every binary
+# here, and the SIL Open Font License requires its text to be distributed
+# with the software that carries it.  Leaving it in the repository only
+# satisfies that for people who clone, not for people who download a build.
+install(FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+        "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts/LICENSE-Liberation.txt"
+    DESTINATION "."
+    COMPONENT dist)
+
+# Everything juce_add_plugin and clap_juce_extensions_plugin produced, minus
+# the static library they share, which is a build artefact and not a plugin.
+# $<CONFIG> rather than CMAKE_BUILD_TYPE: MSVC is a multi-config generator and
+# leaves the latter empty.
+install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/EPMK2_artefacts/$<CONFIG>/"
+        DESTINATION "."
+        USE_SOURCE_PERMISSIONS
+        COMPONENT dist
+        PATTERN "*.a" EXCLUDE
+        PATTERN "*.lib" EXCLUDE)
+
+# ---------------------------------------------------------------------------
 # Headless test that drives the AudioProcessor the way a host would.
 juce_add_console_app(EPMK2_tests PRODUCT_NAME "epmk2-tests")
 
@@ -109,7 +138,7 @@ target_compile_definitions(EPMK2_claptest PUBLIC
     JUCE_WEB_BROWSER=0          # or juce_gui_extra wants gtk and webkit
     JUCE_USE_CURL=0
     JUCE_STANDALONE_APPLICATION=1)
-target_link_libraries(EPMK2_claptest PRIVATE juce::juce_audio_processors ${CMAKE_DL_LIBS})
+target_link_libraries(EPMK2_claptest PRIVATE juce::juce_audio_processors)
 
 # ---------------------------------------------------------------------------
 # The .scl parser, tested on its own.  No JUCE and no plugin: it is a pure

@@ -9,7 +9,8 @@
 //   ./epmk2-claptest path/to/EP-MK2.clap
 #include <cstdio>
 #include <cstring>
-#include <dlfcn.h>
+
+#include <juce_core/juce_core.h>
 
 #include <clap/clap.h>
 
@@ -34,20 +35,34 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    void* handle = dlopen(argv[1], RTLD_LOCAL | RTLD_LAZY);
-    if (handle == nullptr) {
-        printf("  cannot open: %s\n", dlerror());
+    // juce::DynamicLibrary rather than dlopen, so this runs on the platforms
+    // that most need checking: dlfcn.h does not exist on Windows, and a test
+    // that cannot be built there is no test at all.
+    juce::File path(juce::File::getCurrentWorkingDirectory().getChildFile(argv[1]));
+
+    // On macOS a .clap is a bundle -- a directory -- and what has to be
+    // loaded is the binary inside it.
+    if (path.isDirectory()) {
+        const auto inner = path.getChildFile("Contents/MacOS")
+                               .getChildFile(path.getFileNameWithoutExtension());
+        if (inner.existsAsFile())
+            path = inner;
+    }
+
+    juce::DynamicLibrary library;
+    if (! library.open(path.getFullPathName())) {
+        printf("  cannot open %s\n", path.getFullPathName().toRawUTF8());
         return 1;
     }
 
-    auto* entry = (const clap_plugin_entry_t*) dlsym(handle, "clap_entry");
+    auto* entry = (const clap_plugin_entry_t*) library.getFunction("clap_entry");
     check(entry != nullptr, "the binary exports clap_entry");
     if (entry == nullptr)
         return 1;
 
     check(clap_version_is_compatible(entry->clap_version),
           "its CLAP version is one a host would accept");
-    check(entry->init(argv[1]), "it initialises");
+    check(entry->init(path.getFullPathName().toRawUTF8()), "it initialises");
 
     auto* factory = (const clap_plugin_factory_t*)
         entry->get_factory(CLAP_PLUGIN_FACTORY_ID);

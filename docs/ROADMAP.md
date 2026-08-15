@@ -928,15 +928,29 @@ matters.
 required to clone. JUCE used to be a *symlink into the frozen MK1 project*,
 which meant a clone of this repository could not be configured at all.
 
-**Not done: Windows and macOS.** Both need to be built on themselves -- there
-is no realistic cross-compile for VST3 or AU -- so both mean CI, and CI means
-a remote, which does not exist yet. macOS also wants
-`CMAKE_OSX_ARCHITECTURES=arm64;x86_64` for a universal binary, and
-distribution there needs codesigning and notarisation, which is an Apple
-Developer account rather than a build step.
+**Windows and macOS** are built by `.github/workflows/build.yml`, because
+VST3, AU and CLAP all have to be compiled on the platform they run on and
+there is no realistic cross-compile. macOS builds universal
+(`arm64;x86_64`) -- an Apple Silicon runner would otherwise produce an
+arm64-only plugin that will not load in an Intel host.
 
-**Not done: install rules.** There are none, so the font's OFL licence
-currently travels only in the repository. It has to ship with the binary.
+The tests run on every platform, including the CLAP loader, which is the
+check most likely to catch a wrapper wired up wrong somewhere nobody has
+built before. `tests/clap_load.cpp` uses `juce::DynamicLibrary` rather than
+`dlopen` for that reason -- `dlfcn.h` does not exist on Windows, and a test
+that cannot be built there is no test at all -- and it looks inside the
+bundle on macOS, where a `.clap` is a directory.
+
+**Packaging:** `cmake --install build --prefix dist --component dist`. The
+component matters: JUCE installs its own headers, tools and CMake package
+files, and none of that belongs in a plugin download. It stages the four
+formats beside `LICENSE` and the font's `LICENSE-Liberation.txt` -- the
+latter is not optional, since Liberation Sans is embedded in every binary
+and the OFL requires its text to travel with the software.
+
+**Still not done: codesigning and notarisation on macOS.** Without them
+users get a Gatekeeper warning and have to right-click-open. That needs an
+Apple Developer account, so it is a decision rather than a build step.
 
 ## Deliberately not doing yet
 
