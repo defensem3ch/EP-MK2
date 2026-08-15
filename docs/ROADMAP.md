@@ -413,6 +413,91 @@ because every test ran at 48 kHz.
 
 ---
 
+### 1.7 A coupled tine and tone bar — **hypothesised, and the measurement says no**
+
+The idea came from asking what Lounge Lizard does that this does not. Its
+parameter set is public even though its algorithm is not, and it splits the
+fork into *Tine* and *Tone Bar* with a separate decay and volume for each --
+which is what you would expose if you modelled the fork as two resonators
+rather than one.
+
+That is also what a Rhodes fork physically is. The tine and the bar it is
+clamped to are tuned near unison and coupled, and a coupled pair beats: two
+modes a fraction of a Hz apart, whose sum has an envelope that ripples rather
+than decaying straight. This model has no such pair. It has *one* resonator at
+f0, which it calls the tone bar, and the inharmonic modes at 7.1/20.4/39.7x,
+which it calls the tine. Nothing to beat against anything.
+
+**The first measurement appeared to confirm it, and was wrong.** Heterodyning
+the fundamental to DC and fitting its decay in dB left 1.7-2.5 dB of residual
+ripple on every reference note against ~0.6 dB for the model. Two faults, both
+of which flattered the hypothesis:
+
+* The tail of a ten-second note is the noise floor, and its wander was being
+  measured as ripple. A 30 dB floor guard changed the *instrument's* figures
+  by more than the effect being looked for -- note 64 went from 1.66 dB to
+  0.17, note 88 from 2.16 to 0.50.
+* Below note 45 the sub-fundamental leaks through the envelope filter. That is
+  where the model's own "ripple" came from, and the model has no pair at all.
+
+After both guards, only three notes have a window long enough to say anything,
+and they disagree: note 52 shows the instrument 1.8 dB above the model, note
+40 shows 0.9 dB, note 28 shows nothing.
+
+**The direct test settles it.** A coupled pair is two spectral peaks, and with
+ten seconds of note the resolution is 0.1 Hz while a Q-1750 mode at 165 Hz is
+0.09 Hz wide -- so the pair would be resolvable, with no envelope filter, no
+floor guard and no fit anywhere in the measurement. Within 4 Hz of the
+fundamental, above -20 dB of it:
+
+| note | instrument | model |
+| --- | --- | --- |
+| 40 | one peak, 82.42 Hz | one peak, 82.40 Hz |
+| 52 | one peak, 164.83 Hz | one peak, 164.79 Hz |
+| 64 | one peak, 329.56 Hz | one peak, 329.62 Hz |
+
+One peak, every note, both sides. A partner loud enough to put 2 dB of ripple
+on the envelope would sit near -15 dB and could not have hidden under a -20 dB
+threshold. **The reference instrument does not show a split fundamental, so
+there is nothing here for a coupled pair to model.**
+
+**What this does not rule out.** The reference is one sampled instrument, and a
+Kontakt library may have been processed in ways that would not preserve a
+beat. A partner more than 20 dB down is not excluded -- it simply cannot be
+what caused the ripple. And a real Rhodes in a room, with its bar free to move,
+is not the same measurement as a close-mic'd sample.
+
+**What would change the answer:** a direct recording of a real instrument, or a
+mechanical measurement of a fork. Until then this stays refused rather than
+open, because the evidence that prompted it turned out to be measurement
+error.
+
+**Kept:** `tools/beating.py`, with its guards and its caveats written into the
+docstring, so the next person to have this idea gets the corrected version of
+it rather than the first one.
+
+### 1.8 A hammer that is a nonlinear spring — **open**
+
+`Contact Time` and `Vel to Contact` are two controls doing one physical job.
+The standard approach in piano modelling (Chaigne and Askenfelt, JASA 95,
+1994) is a felt force law `F = K * compression^p` with p around 2 to 3, where
+the hammer and the tine are integrated through the collision. Contact time is
+then a *consequence*: a harder blow compresses further up a stiffening curve
+and separates sooner, so "harder is brighter" falls out instead of being
+dialled in.
+
+Lounge Lizard exposes Mallet *Stiffness* and *Force* rather than a contact
+time, which is what that structure would give you.
+
+Two parameters become one with a physical meaning, and the velocity behaviour
+stops being a fitted curve. It is also a precondition for 4.6: calibrating the
+excitation in real units is most of what "displacement in real units" means,
+and without it the drive staging into the pickup has nothing to be calibrated
+against.
+
+Unlike 1.7 this has not been tested against anything, so it is open rather
+than promising.
+
 ## Part 2 — Behaviour: a note that is not identical every time
 
 From the GSi argument: a sample sounds identical every time, and a physical
