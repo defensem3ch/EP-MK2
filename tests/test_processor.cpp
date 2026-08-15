@@ -1391,12 +1391,16 @@ int main()
 
             // Scaling: the panel is laid out at a design size and scaled by a
             // transform, so the header bar should grow in proportion.
+            // Distance from the top of the window down to the first section
+            // header, which is a bright pastel bar.  Matching an exact colour
+            // does not work: the title bar is a gradient, so "same as the top
+            // pixel" stops a few rows in and reports 4 px whatever the scale.
             auto headerDepth = [](const juce::Image& im) {
-                const auto top = im.getPixelAt(im.getWidth() / 2, 2);
-                int y = 0;
-                while (y < im.getHeight() && im.getPixelAt(im.getWidth() / 2, y) == top)
-                    ++y;
-                return y;
+                const int x = im.getWidth() / 2;
+                for (int y = 0; y < im.getHeight(); ++y)
+                    if (im.getPixelAt(x, y).getBrightness() > 0.45f)
+                        return y;
+                return im.getHeight();
             };
             const int base = headerDepth(img);
 
