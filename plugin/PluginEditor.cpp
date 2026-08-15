@@ -708,6 +708,9 @@ PanelContent::PanelContent(EpMk2Processor& p, juce::AudioProcessorValueTreeState
     addAndMakeVisible(scaleCell);
 
     computeLayout();
+    // Once now, or the panel opens showing every dependent control live and
+    // only settles when the timer first fires a tenth of a second later.
+    refreshDependents();
 }
 
 void PanelContent::showHelp(const juce::String& name, const juce::String& text)
@@ -735,7 +738,7 @@ PanelCell* PanelContent::cellNamed(const juce::String& fullName) const
     return nullptr;
 }
 
-void PanelContent::refreshScale()
+void PanelContent::refreshDependents()
 {
     scaleCell.refresh();
 
@@ -744,10 +747,22 @@ void PanelContent::refreshScale()
     // Base Frequency and Base MIDI Note still apply: they set what the scale
     // is measured from and which key stands at its root.
     const bool unequal = ! proc.getScale().empty();
-    const juce::String why("Not in use: the loaded scale sets this.");
+    const juce::String scaleWhy("Not in use: the loaded scale sets this.");
     for (const char* name : { "Divisions", "Interval" })
         if (auto* c = cellNamed(name))
-            c->setDimmed(unequal, why);
+            c->setDimmed(unequal, scaleWhy);
+
+    // Everything else in the tremolo section is downstream of its switch,
+    // stereo included: with the tremolo off there is no swing for the two
+    // channels to take opposite sides of.
+    bool tremolo = false;
+    if (auto* on = proc.getState().getRawParameterValue("trem_on"))
+        tremolo = on->load() > 0.5f;
+    const juce::String tremWhy("Not in use: the tremolo is switched off.");
+    for (const char* name : { "Stereo", "Tremolo Depth", "Tremolo Rate",
+                              "Tremolo Shape" })
+        if (auto* c = cellNamed(name))
+            c->setDimmed(! tremolo, tremWhy);
 }
 
 void PanelContent::setVoiceCount(int n)
@@ -1001,10 +1016,7 @@ EpMk2Editor::~EpMk2Editor()
 void EpMk2Editor::timerCallback()
 {
     content.setVoiceCount(proc.getActiveVoiceCount());
-    // The scale can change without the panel doing it -- loading a session is
-    // the usual way -- and unlike every other control it is not attached to a
-    // parameter, so nothing reports it.
-    content.refreshScale();
+    content.refreshDependents();
 }
 
 void EpMk2Editor::paint(juce::Graphics& g)

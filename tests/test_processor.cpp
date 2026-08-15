@@ -1888,12 +1888,12 @@ int main()
                 s12.name = epmk2::builtInScales().front().name;
 
                 proc.setScale({});
-                if (panel != nullptr) panel->refreshScale();
+                if (panel != nullptr) panel->refreshDependents();
                 const bool liveWhenEqual = ! dimmedState("Divisions")
                                         && ! dimmedState("Interval");
 
                 proc.setScale(s12);
-                if (panel != nullptr) panel->refreshScale();
+                if (panel != nullptr) panel->refreshDependents();
                 const bool dimWhenScaled = dimmedState("Divisions")
                                         && dimmedState("Interval");
                 // Base Frequency and Base MIDI Note still mean something under
@@ -1902,8 +1902,30 @@ int main()
                                         && ! dimmedState("Base MIDI Note");
 
                 proc.setScale({});
-                if (panel != nullptr) panel->refreshScale();
+                if (panel != nullptr) panel->refreshDependents();
                 const bool liveAgain = ! dimmedState("Divisions");
+
+                // The tremolo switch takes over its whole section, stereo
+                // included: with no swing there is nothing for the two
+                // channels to take opposite sides of.
+                auto* tremOn = proc.getState().getParameter("trem_on");
+                tremOn->setValueNotifyingHost(0.0f);
+                if (panel != nullptr) panel->refreshDependents();
+                const bool dimWhenOff = dimmedState("Stereo")
+                                     && dimmedState("Tremolo Depth")
+                                     && dimmedState("Tremolo Rate")
+                                     && dimmedState("Tremolo Shape");
+                tremOn->setValueNotifyingHost(1.0f);
+                if (panel != nullptr) panel->refreshDependents();
+                const bool liveWhenOn = ! dimmedState("Stereo")
+                                     && ! dimmedState("Tremolo Depth")
+                                     && ! dimmedState("Tremolo Rate")
+                                     && ! dimmedState("Tremolo Shape");
+                char tb2[96];
+                snprintf(tb2, sizeof tb2, "  (off %s, on %s)",
+                         dimWhenOff ? "dim" : "LIVE", liveWhenOn ? "live" : "DIM");
+                check(dimWhenOff && liveWhenOn,
+                      "the tremolo switch greys out its own section", tb2);
 
                 char db[128];
                 snprintf(db, sizeof db, "  (equal %s, scaled %s, base %s, back %s)",

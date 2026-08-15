@@ -190,10 +190,12 @@ public:
 
     void setVoiceCount(int n);
     PanelCell* cellNamed(const juce::String& fullName) const;
-    // The scale can change without the panel doing it -- loading a session is
-    // the usual way -- and unlike every other control it is not attached to a
-    // parameter, so nothing reports it.
-    void refreshScale();
+    // Greys out the controls that something else has taken over: the ones a
+    // loaded scale decides, and the ones the tremolo switch turns off.  Runs
+    // on the editor's timer, because the scale can change without the panel
+    // doing it -- loading a session is the usual way -- and unlike every
+    // other control it is not attached to a parameter, so nothing reports it.
+    void refreshDependents();
     void showHelp(const juce::String& name, const juce::String& text);
 
     // The panel is as tall as its contents need at the design width.  Deriving
