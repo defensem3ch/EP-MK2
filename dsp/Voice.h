@@ -126,7 +126,11 @@ struct VoiceParams {
     // against the reference instrument across 25 pitches, the full law puts
     // the harmonic content within 0.1 dB and cuts the spread of the brightness
     // error from 231 Hz to 142.  0 removes the compensation entirely.
-    float tineMassTracking = 1.0f;
+    //
+    // The default is 0.69 rather than the benchmarked 1.0: the full law is
+    // what matches the reference instrument, and it is more bottom end than
+    // the instrument wants to be played with.  See docs/measurements.
+    float tineMassTracking = 0.69f;
 
     // pickup
     float pickupGainLin = 5.6234f;   // +15 dB

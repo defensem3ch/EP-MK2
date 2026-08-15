@@ -86,8 +86,11 @@ strikeAmp = velocityAmp × strikeVar × keyLevel × rateScale
   instrument was 4.6 dB louder at 96 kHz than at 48.
 * `bassTilt` compensates for the pickup's differentiator (§6). A hammer imparts
   momentum and the resulting displacement goes as 1/ω, so a bass tine swings
-  much further for the same blow. The bare law overshoots, because a bass tine
-  is also more massive; half the exponent is the default.
+  much further for the same blow. The bare law, exponent 1.0, is what the
+  benchmark against the reference instrument settles on. The default is
+  **0.69**, a voicing choice rather than a measurement: the full law is
+  correct and heavier in the bottom octave than the instrument is nice to
+  play. 0 removes the compensation entirely.
 
 **Strike Variation** draws contact time, amplitude and delay fresh for every
 note-on, with a low-probability draw at three times the depth — a player does

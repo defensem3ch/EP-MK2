@@ -77,6 +77,36 @@ equally hard at every pitch, so the top of the keyboard kept generating
 harmonics the instrument does not have -- at note 88 the reference's second
 harmonic is 47 dB down and the model's was 15.
 
+#### The shipped default is 0.69, and this is what that costs
+
+1.0 is what the reference instrument measures. 0.69 is a voicing choice made
+by ear: the full law is heavier in the bottom octave than the instrument is
+nice to play. Both banks below were rendered on the library's own grid and put
+through this same code, so the difference is the exponent and nothing else:
+
+| model minus instrument | tilt 1.0 | tilt 0.69 |
+| --- | --- | --- |
+| decay | +0.5 dB of Q, spread 3.6 | +0.4, spread 3.5 |
+| brightness | +41 Hz, spread 142 | +9 Hz, spread **187** |
+| tine level | +0.3 dB, spread 4.7 | +0.2, spread 4.6 |
+| harmonic content | **−0.1 dB**, spread 16.7 | **+4.4 dB**, spread 15.7 |
+| attack | −4.3 ms, spread 6.6 | −2.7 ms, spread 4.7 |
+
+It is a trade rather than a loss. Decay and tine level do not move; attack gets
+closer on both mean and spread; brightness gets closer on the mean and worse on
+the spread, and the spread is the figure that means evenness across the
+keyboard.
+
+The real cost is the harmonic content, and it is the mechanism above running in
+reverse. Bass Tilt is a per-note gain of `(440/f0)^tilt`, so above A4 it is an
+attenuation -- lowering the exponent moves it towards 1 and lets the treble
+through *harder*, which drives the pickup further into its nonlinearity exactly
+where the instrument's own tines have the least excursion. At note 100 the
+reference's second harmonic is 39 dB down and the model's is 18.
+
+If that ever reads as harshness at the top of the keyboard, `Pickup Drive` and
+`Coil Low-Pass` are where to take it back out, not Bass Tilt.
+
 ### Attack
 
 The model reaches its peak about 3 ms sooner than the instrument at the notes
