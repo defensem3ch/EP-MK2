@@ -105,6 +105,13 @@ struct VoiceParams {
     // contact as well as more force, and that is where "harder is brighter"
     // physically comes from.
     float hammerVelContact = 1.5f;
+    // How far the instrument travels from the softest playable note to the
+    // hardest, in octaves of amplitude.  5 is what the Pd original used and
+    // what this has always sounded like.  The reference instrument is wider --
+    // see docs/measurements/BENCHMARK.md -- so this is a control rather than a
+    // correction: the default is the familiar feel, and turning it up walks
+    // towards the measured one.
+    float velocityRange = 5.0f;
     // How far the tine swings for a given strike, against pitch.  A hammer
     // imparts momentum, and the displacement that produces goes as 1/omega --
     // a bass tine swings much further than a treble one for the same blow.
@@ -244,7 +251,7 @@ public:
         // 2^(-5 * (1 - (vel-1)/126)): a five-octave velocity range, matching
         // the patch's [/ 126] -> [1 $1] -> [-] -> [* -5] -> [2 $1] -> [pow].
         const float v = velocity < 0.0f ? 0.0f : (velocity > 127.0f ? 127.0f : velocity);
-        velocityAmp = std::pow(2.0f, -5.0f * (1.0f - (v - 1.0f) / 126.0f));
+        velocityAmp = std::pow(2.0f, -p.velocityRange * (1.0f - (v - 1.0f) / 126.0f));
 
         configure(p, /*releasing=*/false);
 

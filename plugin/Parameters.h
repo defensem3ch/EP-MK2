@@ -72,6 +72,8 @@ inline const std::vector<Spec>& table()
         { "bass_tilt",       "Bass Tilt",       "Hammer", Unit::Ratio,      0.0f,     1.5f,    1.0f, false,
           "How much further a bass tine swings than a treble one for the same blow. The pickup senses rate of change, which favours the treble by 6 dB per octave; this opposes it. Raise it for more bass." },
         // How much one strike differs from the next.  0 is exactly repeatable.
+        { "vel_range",       "Dynamic Range",   "Hammer", Unit::Ratio,      2.0f,    12.0f,    5.0f, false,
+          "How far the instrument travels from the softest note to the hardest. 5 is how this has always played. The reference instrument is wider, nearer 8, which gives more room between soft and loud but asks more of your keyboard." },
         { "strike_var",      "Strike Variation", "Hammer", Unit::Ratio,     0.0f,     1.0f,    0.3f, false,
           "How much one strike differs from the next in force, contact time and timing. At 0 every note is identical; raise it and repeated notes stop sounding sequenced." },
 

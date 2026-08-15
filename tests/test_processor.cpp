@@ -1061,6 +1061,40 @@ int main()
         check(ok, "the pickup table survives a NaN without leaving its bounds");
     }
 
+    // ---- dynamic range ----------------------------------------------------
+    // Widening the range must open up the space below full velocity without
+    // moving full velocity itself -- otherwise every other measurement that
+    // was matched to the reference at 0x7F would drift with this control.
+    {
+        auto peakAt = [&](int velocity, float range) {
+            if (auto* q = proc.getState().getParameter("vel_range"))
+                q->setValueNotifyingHost(q->convertTo0to1(range));
+            proc.prepareToPlay(sr, block);
+            juce::MidiBuffer panic;
+            panic.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+            renderPeak(proc, panic, 1, block);
+            juce::MidiBuffer m;
+            m.addEvent(juce::MidiMessage::noteOn(1, 45, (juce::uint8) velocity), 0);
+            const float pk = renderPeak(proc, m, blocksPerSecond / 2, block);
+            renderPeak(proc, panic, 1, block);
+            return pk;
+        };
+
+        const float loudNarrow = peakAt(127, 5.0f), loudWide = peakAt(127, 8.0f);
+        const float softNarrow = peakAt(30, 5.0f),  softWide = peakAt(30, 8.0f);
+
+        char d[112];
+        snprintf(d, sizeof d, "  (loud %.4f vs %.4f, soft %.4f vs %.4f)",
+                 loudNarrow, loudWide, softNarrow, softWide);
+        check(std::fabs(loudWide - loudNarrow) < loudNarrow * 0.02f
+              && softWide < softNarrow * 0.7f,
+              "dynamic range opens up below without moving full velocity", d);
+
+        if (auto* q = proc.getState().getParameter("vel_range"))
+            q->setValueNotifyingHost(q->convertTo0to1(5.0f));
+        proc.prepareToPlay(sr, block);
+    }
+
     // ---- factory presets -------------------------------------------------
     // A preset that loads but sounds like the one before it is not a preset,
     // so each is measured for level and brightness rather than merely checked

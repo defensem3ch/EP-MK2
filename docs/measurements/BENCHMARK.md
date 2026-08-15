@@ -97,7 +97,39 @@ the feature switched off entirely, 68 high-Q notes held on the pedal are still
 at 94% of their level after 14 seconds. It now compares against that same
 passage with coupling off, which is the only number that says anything.
 
-## Still open: velocity
+## Velocity: a control, not a correction
+
+The model's dynamic range was much narrower than the instrument's. Soft to
+hard, the reference spans 33 to 53 dB depending on pitch; the model spanned 25
+to 32.
+
+`Dynamic Range` (`vel_range`) is that span, in octaves of amplitude:
+
+| octaves | against the reference |
+| --- | --- |
+| **5** (default) | +17.8 dB narrower |
+| 6 | +12.1 |
+| 7 | +6.4 |
+| **8** | **+0.8 dB — matched** |
+| 9 | −4.8 (wider than the instrument) |
+
+It is left at 5, which is what the Pd original used and what this has always
+played like. 8 is the measured answer, and it is a real change to how the
+instrument responds rather than a fault being fixed -- it asks considerably
+more of a keyboard's velocity curve.
+
+The control does nothing at full velocity by construction, so everything else
+that has been matched to the reference -- all of which is measured at 0x7F --
+stays matched at any setting.
+
+**Not modelled:** the reference's range also *widens* towards the treble, from
+33 dB at note 31 to 53 at note 91. The model's is the same at every pitch.
+Whether that is the instrument or its sampling is not something this capture
+can answer.
+
+## Still open
+
+
 
 The model's dynamic range is much too narrow. Soft to hard, the instrument
 spans 33 to 53 dB depending on pitch; the model spans 25 to 32.

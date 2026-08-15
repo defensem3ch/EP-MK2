@@ -58,6 +58,7 @@ bool apply(const juce::AudioProcessorValueTreeState& tree,
         else if (id == "hammer_contact")  p.voice.hammerContactMs = v;
         else if (id == "hammer_vel_ctc")  p.voice.hammerVelContact = v;
         else if (id == "bass_tilt")       p.voice.tineMassTracking = v;
+        else if (id == "vel_range")       p.voice.velocityRange = v;
         else if (id == "strike_var")      p.voice.strikeVariation = v;
         // Pickup
         else if (id == "pickup_gain")     p.voice.pickupGainLin = lin;
