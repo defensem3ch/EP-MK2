@@ -17,6 +17,18 @@ add_subdirectory(JUCE)
 # keep in step -- the CLAP is the same plugin as the VST3.
 add_subdirectory(clap-juce-extensions EXCLUDE_FROM_ALL)
 
+# Everything that compiles PluginProcessor.cpp needs the CLAP headers, which
+# is every tool and test rather than just the plugin: the processor implements
+# the preset-load capability, and that base class is declared in them.
+#
+# The submodule's own targets rather than a hand-written include path.  Doing
+# it by hand meant chasing one missing header into the next -- clap.h, then
+# clap-juce-extensions.h, then clap/helpers/plugin.hh -- while the stale test
+# binaries kept reporting success.
+add_library(EPMK2_clap_headers INTERFACE)
+target_link_libraries(EPMK2_clap_headers INTERFACE
+    clap-core clap-helpers clap_juce_extensions)
+
 # The panel's typeface, embedded rather than looked up on the host.  JUCE's
 # default is whatever the machine calls "sans-serif", which is a different font
 # on every OS -- so without this the plugin looks different everywhere and the
@@ -129,7 +141,7 @@ target_compile_definitions(EPMK2_tests PUBLIC
     JUCE_STANDALONE_APPLICATION=1)
 
 target_link_libraries(EPMK2_tests
-    PRIVATE EPMK2_fonts juce::juce_audio_utils
+    PRIVATE EPMK2_clap_headers EPMK2_fonts juce::juce_audio_utils
     PUBLIC  juce::juce_recommended_config_flags)
 
 # ---------------------------------------------------------------------------
@@ -148,7 +160,7 @@ target_compile_definitions(EPMK2_screenshot PUBLIC
     JUCE_STANDALONE_APPLICATION=1)
 
 target_link_libraries(EPMK2_screenshot
-    PRIVATE EPMK2_fonts juce::juce_audio_utils
+    PRIVATE EPMK2_clap_headers EPMK2_fonts juce::juce_audio_utils
     PUBLIC  juce::juce_recommended_config_flags)
 
 # ---------------------------------------------------------------------------
@@ -187,7 +199,7 @@ target_compile_definitions(EPMK2_playmidi PUBLIC
     JUCE_STANDALONE_APPLICATION=1)
 
 target_link_libraries(EPMK2_playmidi
-    PRIVATE EPMK2_fonts juce::juce_audio_utils juce::juce_audio_formats
+    PRIVATE EPMK2_clap_headers EPMK2_fonts juce::juce_audio_utils juce::juce_audio_formats
     PUBLIC  juce::juce_recommended_config_flags)
 
 # ---------------------------------------------------------------------------
@@ -207,5 +219,5 @@ target_compile_definitions(EPMK2_bank PUBLIC
     JUCE_STANDALONE_APPLICATION=1)
 
 target_link_libraries(EPMK2_bank
-    PRIVATE EPMK2_fonts juce::juce_audio_utils juce::juce_audio_formats
+    PRIVATE EPMK2_clap_headers EPMK2_fonts juce::juce_audio_utils juce::juce_audio_formats
     PUBLIC  juce::juce_recommended_config_flags)
