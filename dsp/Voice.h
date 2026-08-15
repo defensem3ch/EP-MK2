@@ -61,6 +61,10 @@ struct VoiceParams {
     // the Pd model's pickup was too weak to carry a fundamental on its own.
     // Kept as tone controls, not as part of the signal path.
     float tineLevelLin = 0.1778f;   // -15 dB
+    // The tone bar's path into the pickup.  Unity by default, which is what
+    // it was hard-wired at: the pickup faces the tine and its bar, so this is
+    // the physical path, and Tone Direct is the one that is not.
+    float toneSendLin = 1.0f;
     float tineSendLin = 0.000141f;   // -77 dB
 
     // tone bar
@@ -416,7 +420,7 @@ public:
         // two.  The tine used to be added after it, which is why raising its
         // send eventually gave less tine rather than more -- past a point it
         // was pushing the flux curve into saturation on its own.
-        const float pickupIn = (toneRaw + subRaw
+        const float pickupIn = ((toneRaw + subRaw) * p.toneSendLin
                               + tineRaw * p.tineSendLin
                               + strike * p.pickupAttackLin) * p.pickupGainLin;
 

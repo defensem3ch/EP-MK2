@@ -1226,16 +1226,25 @@ int main()
         const double noTine   = levelWith({ { "tine_level", -100.0f } });
         const double neither  = levelWith({ { "tone_level", -100.0f }, { "tine_level", -100.0f } });
         const double noPickup = levelWith({ { "pickup_level", -100.0f } });
+        // Both of the tone bar's paths shut: the one thing Tone Direct alone
+        // could never do, and the reason Tone to Pickup exists.
+        const double noBar = levelWith({ { "tone_level", -100.0f },
+                                         { "tone_send", -100.0f } });
 
-        char rb[240];
+        char rb[280];
         snprintf(rb, sizeof rb,
                  "  (full %.1f dB; without tone %+.1f, tine %+.1f, both %+.1f,"
-                 " pickup %+.1f)",
-                 all, noTone - all, noTine - all, neither - all, noPickup - all);
+                 " pickup %+.1f, tone bar entirely %+.1f)",
+                 all, noTone - all, noTine - all, neither - all,
+                 noPickup - all, noBar - all);
         // Both direct paths off must still sound, and the pickup off must
-        // still sound: neither is the whole instrument on its own.
+        // still sound: neither is the whole instrument on its own.  Closing
+        // both of the tone bar's paths is different in kind -- 10 dB below
+        // what Tone Direct alone can manage, and what is left is the tine,
+        // not a quieter note.
         check(neither > all - 24.0 && noPickup > all - 24.0
-                  && noTone < all - 0.5 && noTine < all - 0.1,
+                  && noTone < all - 0.5 && noTine < all - 0.1
+                  && noBar < neither - 8.0,
               "the pickup and the direct paths each carry part of it", rb);
     }
 

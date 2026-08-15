@@ -90,7 +90,7 @@ inline const std::vector<Spec>& table()
           "Strike Var" },
 
         // --- tine: what actually vibrates -----------------------------------
-        { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,  -15.0f, false,
+        { "tine_level",      "Tine Direct",     "Tine", Unit::Decibels, -100.0f,     0.0f,  -15.0f, false,
           "How much of the tine's own vibration goes straight to the output, bypassing the pickup. Tine to Pickup is the other, more physical path; with that at its default this is most of the tine you hear." },
         { "tine_send",       "Tine to Pickup",  "Tine", Unit::Decibels, -100.0f,    24.0f,  -77.0f, false,
           "How much of the tine reaches the pickup. The pickup faces the tine, so this is the more physical of its two paths to the output.",
@@ -119,8 +119,11 @@ inline const std::vector<Spec>& table()
           "Key Var" },
 
         // --- tone bar: what the tine is mounted on --------------------------
-        { "tone_level",      "Tone Level",      "Tone Bar", Unit::Decibels, -100.0f,     0.0f,    0.0f, false,
+        { "tone_level",      "Tone Direct",     "Tone Bar", Unit::Decibels, -100.0f,     0.0f,    0.0f, false,
           "How much of the tone bar, the resonator the tine is mounted on, goes straight to the output, bypassing the pickup. Turning it down does not mute the tone bar: the pickup carries it too, and always at full level." },
+        { "tone_send",       "Tone to Pickup",  "Tone Bar", Unit::Decibels, -100.0f,    24.0f,    0.0f, false,
+          "How much of the tone bar reaches the pickup. This is the physical path -- the pickup faces the tine and the bar it is mounted on -- so at 0 dB the instrument sounds as it always has. Turning it down is the only way to actually remove the tone bar, which Tone Direct cannot do.",
+          "Tone Send" },
         { "tone_decay",      "Tone Decay",      "Tone Bar", Unit::Q,          1.0f,  4000.0f, 1750.0f, true,
           "How long the fundamental rings, measured at A4. This is the body of the note, as against the tine's attack." },
         { "q_tracking",      "Decay Tracking",  "Tone Bar", Unit::Ratio,      0.0f,     1.0f,  0.056f, true,

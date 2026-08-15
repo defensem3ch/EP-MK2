@@ -143,7 +143,7 @@ by panning between two amplifiers. Everything downstream of that is per channel.
 
 ## Interface
 
-* 44 controls, grouped by physical part and ordered **level, then tone, then
+* 46 controls, grouped by physical part and ordered **level, then tone, then
   time** within each group, in signal-flow order with tuning last.
 * **The typeface is embedded**, so the panel looks the same on every machine.
   Both MK1 and the port asked the host for "sans-serif" and got a different
@@ -156,6 +156,19 @@ by panning between two amplifiers. Everything downstream of that is per channel.
   session, and survives a layout change between versions.
 * Polyphony reaches 128. Cost is 0.41–0.46% of a core per sounding voice; a
   full 88-key keyboard held down is 36.6%.
+
+## Both paths out of a resonator are controls now
+
+MK1 had `tone_level` and `tine_level`, and MK2 kept them -- but they only ever
+scaled the *direct* path to the output. The pickup carried the tone bar at
+unity with nothing in front of it, so turning "Tone Level" down could not
+remove the tone bar, only the un-pickup'd copy of it. Measured: 3.5 dB quieter,
+not silent.
+
+They are `Tone Direct` and `Tine Direct` now, and `Tone to Pickup` exists
+alongside `Tine to Pickup`, so each resonator's two paths are both controls and
+both named for where they go. `Tone to Pickup` defaults to 0 dB, which is what
+it was hard-wired at, so nothing sounds different until it is moved.
 
 ## What is not carried over
 

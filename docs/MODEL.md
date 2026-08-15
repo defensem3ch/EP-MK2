@@ -201,8 +201,8 @@ them was struck.
 A magnet and coil facing the tine. Its input is
 
 ```
-pickupIn = (strike·hammerToPickup + toneBar + sub) · pickupDrive
-         + tine · tineToPickup
+pickupIn = ((toneBar + sub)·toneToPickup + tine·tineToPickup
+            + strike·hammerToPickup) · pickupDrive
 ```
 
 and then, in order:
@@ -255,15 +255,22 @@ pickup that is a tone control rather than a model.
 
 ```
 mix = strike·hammerLevel + pickupOut
-    + (toneBar + sub)·toneLevel + tine·tineLevel
+    + (toneBar + sub)·toneDirect + tine·tineDirect
 ```
+
+Each resonator therefore has two ways out: through the pickup (`Tone to
+Pickup`, `Tine to Pickup`) and straight to the output (`Tone Direct`, `Tine
+Direct`). The names matter because the direct control does not gate the other
+path -- with `Tone Direct` off the pickup still carries the tone bar, and the
+instrument is 3.5 dB quieter rather than silent. Closing both is 13.5 dB down,
+and what is left is the tine.
 
 then the voice's gate, then a keytracked low-pass kept from the Pd original —
 measured to be doing nothing audible at the shipped settings, and retained
 because removing it has not been tested rather than because it earns its place.
 
-The direct `toneLevel` and `tineLevel` paths are not physical: a real Rhodes is
-heard only through its pickup. They are how the Pd model got a fundamental when
+`Tone Direct` and `Tine Direct` are not physical: a real Rhodes is heard only
+through its pickup. They are how the Pd model got a fundamental when
 its pickup path was too weak to supply one, and they remain because **the
 keyboard's evenness depends on them** -- they carry the fundamental without
 passing through the pickup's differentiator, which is the only thing opposing
