@@ -1,4 +1,9 @@
 build/
+# Credentials, in case one ever lands here again.  One did, briefly, and the
+# only thing between it and a push was a pattern in this file -- it lives in
+# ~/.config/epmk2 now, which is somewhere git will never walk.
+*token*
+*.pem
 # JUCE is a submodule now, not a symlink into the MK1 project next door.
 # It was the latter, which meant this could not be built without a frozen
 # project present, and a clone got no JUCE at all.
