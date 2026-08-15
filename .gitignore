@@ -1,5 +1,7 @@
 build/
-JUCE
+# JUCE is a submodule now, not a symlink into the MK1 project next door.
+# It was the latter, which meant this could not be built without a frozen
+# project present, and a clone got no JUCE at all.
 *.MID
 *.mid
 
