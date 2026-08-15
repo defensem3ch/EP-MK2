@@ -20,6 +20,39 @@ constexpr float kInfoFont    = 14.0f;
 // How far the glow reaches past the lamp, as a multiple of its radius.  The
 // lamp is sized so that lamp + glow exactly fills its component.
 constexpr float kGlowReach   = 1.9f;
+
+// Kept together so the panel can be re-weighted in one place.  These sit
+// between the mid grey this started at and the near black it went to: dark
+// enough that the pastels carry, light enough that the panel has depth rather
+// than being a hole with controls in it.
+namespace col {
+constexpr juce::uint32 panelTop     = 0xff232323;
+constexpr juce::uint32 panelBottom  = 0xff181818;
+constexpr juce::uint32 headerTop    = 0xff313131;
+constexpr juce::uint32 headerBottom = 0xff232323;
+constexpr juce::uint32 sectionTop   = 0xff2b2b2b;
+constexpr juce::uint32 sectionBot   = 0xff222222;
+constexpr juce::uint32 cellTop      = 0xff262626;
+constexpr juce::uint32 cellBottom   = 0xff1e1e1e;
+constexpr juce::uint32 valueBox     = 0xff121212;
+constexpr juce::uint32 infoTop      = 0xff1b1b1b;
+constexpr juce::uint32 infoBottom   = 0xff141414;
+constexpr juce::uint32 knobTop      = 0xffdcdcdc;
+constexpr juce::uint32 knobBottom   = 0xff909090;
+constexpr juce::uint32 knobRim      = 0xff101010;
+constexpr juce::uint32 track        = 0xff3d3d3d;
+constexpr juce::uint32 lampOff      = 0xff2f2f2f;
+constexpr juce::uint32 pointer      = 0xff2b2b2b;
+}
+
+// A vertical gradient, which is all the depth any of this needs.
+inline void fillVertical(juce::Graphics& g, juce::Rectangle<float> r,
+                         juce::uint32 top, juce::uint32 bottom)
+{
+    g.setGradientFill(juce::ColourGradient(juce::Colour(top), r.getX(), r.getY(),
+                                           juce::Colour(bottom), r.getX(), r.getBottom(),
+                                           false));
+}
 // Room for two lines of label.
 // Two lines of name, so every knob below it is the same size.
 constexpr int   kLabelArea   = 36;
@@ -54,7 +87,7 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
         // stringFromValue supplies both, and setting them again doubles the
         // unit ("0.0 dB dB").
         slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-        slider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff050505));
+        slider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(col::valueBox));
         slider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::white);
         // The travelled arc takes the colour of the section it sits in, so the
         // pastel grouping does some work rather than only labelling a header.
@@ -90,8 +123,9 @@ void ParamControl::paint(juce::Graphics& g)
     // row's label directly beneath, at the same spacing as the gap inside the
     // control -- and the eye pairs the value with the wrong name.  This is the
     // cheapest way to say which three things belong together.
-    g.setColour(juce::Colour(0xff161616));
-    g.fillRoundedRectangle(getLocalBounds().reduced(2, 1).toFloat(), 4.0f);
+    const auto cell = getLocalBounds().reduced(2, 1).toFloat();
+    fillVertical(g, cell, col::cellTop, col::cellBottom);
+    g.fillRoundedRectangle(cell, 4.0f);
 
     g.setColour(juce::Colour(0xffe4e4e4));
     g.setFont(juce::FontOptions(kLabelFont, juce::Font::bold));
@@ -162,7 +196,7 @@ int ParamSection::columnsForWidth(int width)
 void ParamSection::paint(juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    g.setColour(juce::Colour(0xff1d1d1d));
+    fillVertical(g, r, col::sectionTop, col::sectionBot);
     g.fillRoundedRectangle(r, 4.0f);
 
     auto header = r.removeFromTop((float)kSectionHeader);
@@ -214,7 +248,7 @@ void PanelLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y,
     juce::Path track;
     track.addCentredArc(centre.x, centre.y, ringRadius, ringRadius, 0.0f,
                         startAngle, endAngle, true);
-    g.setColour(juce::Colour(0xff333333));
+    g.setColour(juce::Colour(col::track));
     g.strokePath(track, juce::PathStrokeType(ringWidth,
                  juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
@@ -230,13 +264,14 @@ void PanelLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y,
 
     // A solid body, so the knob reads as an object rather than an outline.
     const float bodyRadius = ringRadius - ringWidth * 0.85f;
-    g.setColour(juce::Colour(0xff141414));
+    g.setColour(juce::Colour(col::knobRim));
     g.fillEllipse(juce::Rectangle<float>(bodyRadius * 2.0f + 3.0f,
                                          bodyRadius * 2.0f + 3.0f)
                       .withCentre(centre));
-    g.setColour(juce::Colour(0xffc0c0c0));
-    g.fillEllipse(juce::Rectangle<float>(bodyRadius * 2.0f, bodyRadius * 2.0f)
-                      .withCentre(centre));
+    const auto body = juce::Rectangle<float>(bodyRadius * 2.0f, bodyRadius * 2.0f)
+                          .withCentre(centre);
+    fillVertical(g, body, col::knobTop, col::knobBottom);
+    g.fillEllipse(body);
 
     // The pointer: a line to the rim, not a dot beside it.
     juce::Path pointer;
@@ -245,7 +280,7 @@ void PanelLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y,
                                 thickness, bodyRadius * 0.62f, thickness * 0.5f);
     pointer.applyTransform(juce::AffineTransform::rotation(angle)
                                .translated(centre.x, centre.y));
-    g.setColour(juce::Colour(0xff303030));
+    g.setColour(juce::Colour(col::pointer));
     g.fillPath(pointer);
 }
 
@@ -283,7 +318,7 @@ void PanelLookAndFeel::drawToggleButton(juce::Graphics& g,
         g.setColour(tint.brighter(0.7f).withAlpha(0.85f));
         g.fillEllipse(lamp.reduced(radius * 0.45f).translated(0.0f, -radius * 0.12f));
     } else {
-        g.setColour(juce::Colour(0xff262626));
+        g.setColour(juce::Colour(col::lampOff));
         g.fillEllipse(lamp);
         g.setColour(tint.withAlpha(highlighted ? 0.35f : 0.16f));
         g.fillEllipse(lamp.reduced(radius * 0.34f));
@@ -327,10 +362,11 @@ void PanelContent::setVoiceCount(int n)
 
 void PanelContent::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff0f0f0f));
+    fillVertical(g, getLocalBounds().toFloat(), col::panelTop, col::panelBottom);
+    g.fillRect(getLocalBounds());
 
     auto header = getLocalBounds().removeFromTop(kHeaderHeight);
-    g.setColour(juce::Colour(0xff1a1a1a));
+    fillVertical(g, header.toFloat(), col::headerTop, col::headerBottom);
     g.fillRect(header);
 
     auto titleArea = header.reduced(16, 0);
@@ -356,7 +392,7 @@ void PanelContent::paint(juce::Graphics& g)
 
     // ---- info bar ---------------------------------------------------------
     auto bar = getLocalBounds().removeFromBottom(kInfoBarHeight);
-    g.setColour(juce::Colour(0xff080808));
+    fillVertical(g, bar.toFloat(), col::infoTop, col::infoBottom);
     g.fillRect(bar);
     g.setColour(juce::Colour(0xff2c2c2c));
     g.fillRect(bar.removeFromTop(1));
@@ -481,7 +517,7 @@ void EpMk2Editor::timerCallback()
 
 void EpMk2Editor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff0f0f0f));
+    g.fillAll(juce::Colour(col::panelBottom));
 }
 
 void EpMk2Editor::resized()
