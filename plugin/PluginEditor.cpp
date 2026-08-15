@@ -5,7 +5,7 @@ using namespace epmk2::params;
 
 namespace {
 constexpr int kControlWidth  = 100;
-constexpr int kControlHeight = 118;
+constexpr int kControlHeight = 124;
 constexpr int kSectionHeader = 30;
 constexpr int kHeaderHeight  = 56;
 
@@ -17,6 +17,9 @@ constexpr float kTitleFont   = 30.0f;
 constexpr float kValueFont   = 16.0f;
 constexpr float kCreditFont  = 12.0f;
 constexpr float kInfoFont    = 14.0f;
+// How far the glow reaches past the lamp, as a multiple of its radius.  The
+// lamp is sized so that lamp + glow exactly fills its component.
+constexpr float kGlowReach   = 1.9f;
 // Room for two lines of label.
 // Two lines of name, so every knob below it is the same size.
 constexpr int   kLabelArea   = 36;
@@ -51,7 +54,7 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
         // stringFromValue supplies both, and setting them again doubles the
         // unit ("0.0 dB dB").
         slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-        slider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff1c1c1c));
+        slider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff050505));
         slider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::white);
         // The travelled arc takes the colour of the section it sits in, so the
         // pastel grouping does some work rather than only labelling a header.
@@ -87,7 +90,7 @@ void ParamControl::paint(juce::Graphics& g)
     // row's label directly beneath, at the same spacing as the gap inside the
     // control -- and the eye pairs the value with the wrong name.  This is the
     // cheapest way to say which three things belong together.
-    g.setColour(juce::Colour(0xff2f2f2f));
+    g.setColour(juce::Colour(0xff161616));
     g.fillRoundedRectangle(getLocalBounds().reduced(2, 1).toFloat(), 4.0f);
 
     g.setColour(juce::Colour(0xffe4e4e4));
@@ -106,12 +109,14 @@ void ParamControl::resized()
     auto r = getLocalBounds();
     r.removeFromTop(kLabelArea);
     if (isToggle)
-        button.setBounds(r.withTrimmedBottom(10).withSizeKeepingCentre(40, 40));
+        button.setBounds(r.withTrimmedBottom(12).withSizeKeepingCentre(56, 56));
     else
         // The trim is the gap *between* rows.  It has to be larger than the
         // space between the knob and its own value, or proximity groups them
         // the wrong way round.
-        slider.setBounds(r.reduced(4, 0).withTrimmedBottom(10));
+        // A few pixels above the knob and below it, so it is not pressed
+        // against its name or its value.
+        slider.setBounds(r.reduced(4, 0).withTrimmedTop(5).withTrimmedBottom(12));
 }
 
 //==============================================================================
@@ -157,7 +162,7 @@ int ParamSection::columnsForWidth(int width)
 void ParamSection::paint(juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat();
-    g.setColour(juce::Colour(0xff383838));
+    g.setColour(juce::Colour(0xff1d1d1d));
     g.fillRoundedRectangle(r, 4.0f);
 
     auto header = r.removeFromTop((float)kSectionHeader);
@@ -209,7 +214,7 @@ void PanelLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y,
     juce::Path track;
     track.addCentredArc(centre.x, centre.y, ringRadius, ringRadius, 0.0f,
                         startAngle, endAngle, true);
-    g.setColour(juce::Colour(0xff4a4a4a));
+    g.setColour(juce::Colour(0xff333333));
     g.strokePath(track, juce::PathStrokeType(ringWidth,
                  juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
@@ -250,9 +255,13 @@ void PanelLookAndFeel::drawToggleButton(juce::Graphics& g,
 {
     auto bounds = button.getLocalBounds().toFloat();
     const float size = juce::jmin(bounds.getWidth(), bounds.getHeight());
-    auto lamp = bounds.withSizeKeepingCentre(size, size).reduced(size * 0.14f);
+    // The lamp is small relative to its component because the glow is drawn
+    // *outside* it, and anything past the component's bounds is clipped --
+    // which is what made a round glow come out square at the corners.
+    const float radius = size * 0.5f / kGlowReach;
+    auto lamp = juce::Rectangle<float>(radius * 2.0f, radius * 2.0f)
+                    .withCentre(bounds.getCentre());
     const auto centre = lamp.getCentre();
-    const float radius = lamp.getWidth() * 0.5f;
 
     const bool on = button.getToggleState();
     const juce::Colour tint = button.findColour(juce::ToggleButton::tickColourId);
@@ -264,8 +273,9 @@ void PanelLookAndFeel::drawToggleButton(juce::Graphics& g,
     if (on) {
         // Glow: a couple of soft rings outside the lamp itself.
         for (int i = 3; i >= 1; --i) {
-            g.setColour(tint.withAlpha(0.13f / (float) i));
-            g.fillEllipse(lamp.expanded(radius * 0.55f * (float) i));
+            g.setColour(tint.withAlpha(0.14f / (float) i));
+            g.fillEllipse(lamp.expanded(radius * ((kGlowReach - 1.0f) / 3.0f)
+                                        * (float) i));
         }
         g.setColour(tint);
         g.fillEllipse(lamp);
@@ -273,7 +283,7 @@ void PanelLookAndFeel::drawToggleButton(juce::Graphics& g,
         g.setColour(tint.brighter(0.7f).withAlpha(0.85f));
         g.fillEllipse(lamp.reduced(radius * 0.45f).translated(0.0f, -radius * 0.12f));
     } else {
-        g.setColour(juce::Colour(0xff3a3a3a));
+        g.setColour(juce::Colour(0xff262626));
         g.fillEllipse(lamp);
         g.setColour(tint.withAlpha(highlighted ? 0.35f : 0.16f));
         g.fillEllipse(lamp.reduced(radius * 0.34f));
@@ -317,10 +327,10 @@ void PanelContent::setVoiceCount(int n)
 
 void PanelContent::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff2a2a2a));
+    g.fillAll(juce::Colour(0xff0f0f0f));
 
     auto header = getLocalBounds().removeFromTop(kHeaderHeight);
-    g.setColour(juce::Colour(0xff404040));
+    g.setColour(juce::Colour(0xff1a1a1a));
     g.fillRect(header);
 
     auto titleArea = header.reduced(16, 0);
@@ -346,9 +356,9 @@ void PanelContent::paint(juce::Graphics& g)
 
     // ---- info bar ---------------------------------------------------------
     auto bar = getLocalBounds().removeFromBottom(kInfoBarHeight);
-    g.setColour(juce::Colour(0xff222222));
+    g.setColour(juce::Colour(0xff080808));
     g.fillRect(bar);
-    g.setColour(juce::Colour(0xff3a3a3a));
+    g.setColour(juce::Colour(0xff2c2c2c));
     g.fillRect(bar.removeFromTop(1));
     bar = bar.reduced(16, 5);
 
@@ -471,7 +481,7 @@ void EpMk2Editor::timerCallback()
 
 void EpMk2Editor::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff2a2a2a));
+    g.fillAll(juce::Colour(0xff0f0f0f));
 }
 
 void EpMk2Editor::resized()
