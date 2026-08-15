@@ -136,8 +136,14 @@ void ParamControl::paint(juce::Graphics& g)
     // their neighbours.  The text is aligned to the *bottom* of that area, so
     // a one-line name still sits directly above its knob rather than floating
     // at the top of the cell with a gap under it.
+    // No horizontal squashing (1.0) and no more than two lines.  JUCE's
+    // default lets it compress glyphs to about 0.7 of their width to make text
+    // fit, which is why some names looked narrower than others -- and it
+    // shrinks the font height too.  Forbidding both means every label on the
+    // panel is drawn at exactly the same size, and the cell has to be wide
+    // enough for the longest word instead.
     g.drawFittedText(label, getLocalBounds().removeFromTop(kLabelArea).reduced(2, 0),
-                     juce::Justification::centredBottom, 2);
+                     juce::Justification::centredBottom, 2, 1.0f);
 }
 
 void ParamControl::resized()

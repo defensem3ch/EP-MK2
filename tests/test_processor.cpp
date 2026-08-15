@@ -1367,6 +1367,64 @@ int main()
                 }
             };
             walk(ed.get());
+            // The width a control actually gets, read from the panel.
+            int widestControl = 0;
+            std::function<void(juce::Component*)> widths = [&](juce::Component* comp) {
+                for (int k = 0; k < comp->getNumChildComponents(); ++k) {
+                    auto* child = comp->getChildComponent(k);
+                    if (dynamic_cast<ParamControl*>(child) != nullptr)
+                        widestControl = juce::jmax(widestControl, child->getWidth());
+                    widths(child);
+                }
+            };
+            widths(ed.get());
+
+            // No label may be squashed or shrunk to fit.  JUCE's fitted text
+            // will compress glyphs to ~0.7 of their width and reduce the font
+            // height rather than overflow, which quietly leaves some names
+            // narrower than others -- and the panel should be one size of type
+            // throughout.  So: every label must fit at full size, in at most
+            // two lines, in the width it has.
+            {
+                const juce::Font labelFont(juce::FontOptions(15.0f, juce::Font::bold));
+                auto widthOf = [&](const juce::String& t) {
+                    return juce::GlyphArrangement::getStringWidthInt(labelFont, t);
+                };
+                // The narrowest a name can be drawn without squashing: the
+                // best split into two lines, or the longest word if it cannot
+                // be split usefully.
+                auto required = [&](const juce::String& name) {
+                    auto words = juce::StringArray::fromTokens(name, " ", "");
+                    if (words.size() < 2)
+                        return widthOf(name);
+                    int best = widthOf(name);
+                    for (int k = 1; k < words.size(); ++k) {
+                        juce::StringArray a, b;
+                        for (int i = 0; i < words.size(); ++i)
+                            (i < k ? a : b).add(words[i]);
+                        best = juce::jmin(best, juce::jmax(widthOf(a.joinIntoString(" ")),
+                                                           widthOf(b.joinIntoString(" "))));
+                    }
+                    return best;
+                };
+
+                int worstOver = 0;
+                juce::String worstName;
+                for (const auto& sp : epmk2::params::table()) {
+                    const int need = required(sp.name);
+                    if (need > widestControl - 4) {
+                        const int over = need - (widestControl - 4);
+                        if (over > worstOver) { worstOver = over; worstName = sp.name; }
+                    }
+                }
+                char lb[128];
+                snprintf(lb, sizeof lb, "  (%d px of room; worst is %s, over by %d)",
+                         widestControl - 4, worstName.isEmpty() ? "none"
+                                                                : worstName.toRawUTF8(),
+                         worstOver);
+                check(worstOver == 0, "no label has to be squashed to fit", lb);
+            }
+
             // Value boxes sitting flush on the section border look unfinished.
             int tightest = 10000;
             juce::String tightestName;
