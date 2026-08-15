@@ -135,9 +135,9 @@ void ParamControl::paint(juce::Graphics& g)
     g.setFont(juce::FontOptions(kLabelFont, juce::Font::bold));
     // The name area is a fixed two lines so that every knob comes out the same
     // size -- sizing it to the text made controls with long names smaller than
-    // their neighbours.  The text is aligned to the *bottom* of that area, so
-    // a one-line name still sits directly above its knob rather than floating
-    // at the top of the cell with a gap under it.
+    // their neighbours.  The text is aligned to the *top* of that area, so
+    // every name in a row starts on the same line whether it wraps or not; a
+    // one-line name then sits a line clear of its knob rather than against it.
     // No horizontal squashing (1.0) and no more than two lines.  JUCE's
     // default lets it compress glyphs to about 0.7 of their width to make text
     // fit, which is why some names looked narrower than others -- and it
@@ -145,7 +145,7 @@ void ParamControl::paint(juce::Graphics& g)
     // panel is drawn at exactly the same size, and the cell has to be wide
     // enough for the longest word instead.
     g.drawFittedText(label, getLocalBounds().removeFromTop(kLabelArea).reduced(2, 0),
-                     juce::Justification::centredBottom, 2, 1.0f);
+                     juce::Justification::centredTop, 2, 1.0f);
 }
 
 void ParamControl::resized()
