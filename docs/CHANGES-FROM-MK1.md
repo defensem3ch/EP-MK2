@@ -143,7 +143,7 @@ by panning between two amplifiers. Everything downstream of that is per channel.
 
 ## Interface
 
-* 46 controls, grouped by physical part and ordered **level, then tone, then
+* 50 controls, grouped by physical part and ordered **level, then tone, then
   time** within each group, in signal-flow order with tuning last.
 * **The typeface is embedded**, so the panel looks the same on every machine.
   Both MK1 and the port asked the host for "sans-serif" and got a different

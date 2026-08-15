@@ -139,7 +139,7 @@ and the band-pass this replaced had none of them:
   bare `b1 = 1` is 1/f² across the keyboard. Measured 0.996 to 1.001 across
   30 Hz–4 kHz and Q 225–1642.
 
-That last property is why `Tone Decay` and `Tone Level` are independent
+That last property is why `Tone Decay` and `Tone Direct` are independent
 controls, and it is what makes a keyboard-varying Q possible at all.
 
 ### The tone bar — the note's pitch
