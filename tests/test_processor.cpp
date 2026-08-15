@@ -1169,6 +1169,9 @@ int main()
         {
             std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
             auto* e = dynamic_cast<EpMk2Editor*>(ed.get());
+            // Wait out the settle window, so this counts as the user resizing
+            // rather than the host opening the window.
+            juce::Thread::sleep(800);
             w = EpMk2Editor::kDesignWidth * 5 / 4;
             h = e != nullptr ? e->designHeightForTest() * 5 / 4 : ed->getHeight();
             ed->setSize(w, h);
@@ -1204,6 +1207,30 @@ int main()
                      w, h, ed->getWidth(), ed->getHeight());
             check(std::abs(ed->getWidth() - w) <= 2,
                   "restoring a session does not reset the window", d);
+        }
+
+        // A host sizing the editor must not be mistaken for the user doing
+        // it.  Hosts set their own size immediately after constructing the
+        // editor, and the first time one sees a new build it has nothing
+        // remembered and uses the default -- which used to be written down as
+        // the preference, permanently, so shipping a build wiped it.
+        {
+            EpMk2Processor fresh;
+            fresh.setPlayConfigDetails(0, 2, sr, block);
+            fresh.prepareToPlay(sr, block);
+            {
+                std::unique_ptr<juce::AudioProcessorEditor> ed(fresh.createEditor());
+                auto* e = dynamic_cast<EpMk2Editor*>(ed.get());
+                // Straight away, as a host does.
+                ed->setSize(EpMk2Editor::kDesignWidth,
+                            e != nullptr ? e->designHeightForTest() : ed->getHeight());
+            }
+            std::unique_ptr<juce::AudioProcessorEditor> ed(fresh.createEditor());
+            char d[112];
+            snprintf(d, sizeof d, "  (host asked for %d, reopened at %d, wanted %d)",
+                     EpMk2Editor::kDesignWidth, ed->getWidth(), w);
+            check(std::abs(ed->getWidth() - w) <= 2,
+                  "a host opening the window does not overwrite the preference", d);
         }
 
         // A size stored by an older layout still restores: the design size

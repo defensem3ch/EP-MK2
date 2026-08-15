@@ -153,6 +153,10 @@ private:
     EpMk2Processor& proc;
     PanelContent content;
     int activeVoices = 0;
+    // When the editor was built.  Resizes arriving in the first moments come
+    // from the host opening the window, not from the user, and must not be
+    // written down as a preference.
+    juce::uint32 openedAt = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EpMk2Editor)
 };

@@ -20,6 +20,8 @@ constexpr float kInfoFont    = 14.0f;
 // How far the glow reaches past the lamp, as a multiple of its radius.  The
 // lamp is sized so that lamp + glow exactly fills its component.
 constexpr float kGlowReach   = 1.9f;
+// How long after the editor opens a resize is assumed to be the host's doing.
+constexpr juce::uint32 kSettleMs = 700;
 
 // Kept together so the panel can be re-weighted in one place.  These sit
 // between the mid grey this started at and the near black it went to: dark
@@ -473,6 +475,7 @@ void PanelContent::resized()
 EpMk2Editor::EpMk2Editor(EpMk2Processor& p)
     : juce::AudioProcessorEditor(&p), proc(p), content(p, p.getState())
 {
+    openedAt = juce::Time::getMillisecondCounter();
     designHeight = content.designHeight();
     // Read before anything sizes the window.  setResizeLimits() resizes a
     // still-empty editor to the minimum to satisfy them, which fires resized()
@@ -522,7 +525,18 @@ void EpMk2Editor::paint(juce::Graphics& g)
 
 void EpMk2Editor::resized()
 {
-    proc.saveEditorSize(getWidth(), getHeight());
+    // Only remember a size the user could have chosen.
+    //
+    // A host sizes the editor immediately after constructing it -- and the
+    // first time it sees a new build, it has nothing remembered and uses the
+    // default.  Saving that overwrote the stored preference with the factory
+    // size, permanently, which is why shipping a build appeared to wipe it:
+    // the size was being read correctly and then immediately thrown away.
+    //
+    // Anything in the first moments is therefore the host talking.  Later
+    // resizes are the user, whether by our corner or the host's window frame.
+    if (juce::Time::getMillisecondCounter() - openedAt > kSettleMs)
+        proc.saveEditorSize(getWidth(), getHeight());
 
     const float scale = juce::jmin((float)getWidth()  / (float)kDesignWidth,
                                    (float)getHeight() / (float)designHeight);
