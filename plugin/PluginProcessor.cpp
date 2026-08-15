@@ -1,3 +1,5 @@
+#include <clap/clap.h>
+
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "Presets.h"
@@ -121,6 +123,28 @@ void EpMk2Processor::setScale(const epmk2::Scale& s)
         cents.add(juce::String(c, 6));
     state.state.setProperty(kScaleName, juce::String(s.name), nullptr);
     state.state.setProperty(kScaleCents, cents.joinIntoString(","), nullptr);
+}
+
+bool EpMk2Processor::presetLoadFromLocation(uint32_t locationKind, const char* location,
+                                           const char* loadKey) noexcept
+{
+    if (locationKind != CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN || location != nullptr
+        || loadKey == nullptr) {
+        reportPresetLoadError(locationKind, location, loadKey, 0,
+                              "EP-MK2's presets are inside the plugin, not in files");
+        return false;
+    }
+
+    const auto& table = epmk2::presets::table();
+    for (size_t i = 0; i < table.size(); ++i)
+        if (juce::String(table[i].name) == loadKey) {
+            setCurrentProgram((int) i);
+            return true;
+        }
+
+    reportPresetLoadError(locationKind, location, loadKey, 0,
+                          juce::String("no preset called ") + loadKey);
+    return false;
 }
 
 void EpMk2Processor::getStateInformation(juce::MemoryBlock& destData)

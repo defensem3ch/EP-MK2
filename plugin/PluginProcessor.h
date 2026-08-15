@@ -2,12 +2,15 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include <clap-juce-extensions/clap-juce-extensions.h>
+
 #include "../dsp/Engine.h"
 #include "Parameters.h"
 
 // MIDI-in / audio-out wrapper around the DSP engine, with the model's controls
 // exposed as host parameters (see Parameters.h for the table).
-class EpMk2Processor : public juce::AudioProcessor
+class EpMk2Processor : public juce::AudioProcessor,
+                       public clap_juce_extensions::clap_juce_audio_processor_capabilities
 {
 public:
     EpMk2Processor();
@@ -53,6 +56,13 @@ public:
     void flushSettings();
 
     bool isBusesLayoutSupported(const BusesProperties&) const { return true; }
+
+    // A CLAP host loading one of the factory presets.  The presets live in
+    // the binary rather than in files, so the location is PLUGIN and the
+    // load_key is the preset's name -- see ClapPresets.cpp.
+    bool supportsPresetLoad() const noexcept override { return true; }
+    bool presetLoadFromLocation(uint32_t locationKind, const char* location,
+                                const char* loadKey) noexcept override;
 
     // The tuning, when it is not the equal divisions the parameters describe.
     // An empty scale means it is.  Message thread only.

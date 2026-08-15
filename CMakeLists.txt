@@ -56,7 +56,8 @@ juce_add_plugin(EPMK2
 target_sources(EPMK2 PRIVATE
     plugin/PluginProcessor.cpp
     plugin/PluginEditor.cpp
-    plugin/Parameters.cpp)
+    plugin/Parameters.cpp
+    plugin/ClapPresets.cpp)
 
 target_compile_definitions(EPMK2 PUBLIC
     JUCE_WEB_BROWSER=0          # webkit2gtk is not required for this plugin
@@ -68,7 +69,11 @@ target_compile_definitions(EPMK2 PUBLIC
 # anything has saved a project referring to it.
 clap_juce_extensions_plugin(TARGET EPMK2
     CLAP_ID "audio.defensem3ch.epmk2"
-    CLAP_FEATURES instrument "electric piano" keyboard synthesizer stereo)
+    CLAP_FEATURES instrument "electric piano" keyboard synthesizer stereo
+    # Lets us hand the host a preset discovery factory, which is the only way
+    # a CLAP host ever sees the factory presets: CLAP has no equivalent of a
+    # VST3 program list, and the wrapper does not map JUCE's programs.
+    CLAP_SUPPORTS_CUSTOM_FACTORY 1)
 
 target_link_libraries(EPMK2
     PRIVATE
