@@ -1,3 +1,5 @@
+#include <limits>
+
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 
@@ -439,26 +441,58 @@ void PanelContent::computeLayout(int width)
     // A section is inset by 4 either side inside its column.
     const int innerCols = ParamSection::columnsForWidth(cellW - 8);
 
-    int columnHeight[kSectionColumns] = {};
-    placements.clear();
+    const int n = sections.size();
+    std::vector<int> tall((size_t) n);
+    for (int i = 0; i < n; ++i)
+        tall[(size_t) i] = kSectionHeader + 4
+                         + sections[i]->rowsNeeded(innerCols) * kControlHeight
+                         + kSectionBottomPad;
 
-    for (int i = 0; i < sections.size(); ++i) {
-        int shortest = 0;
-        for (int c = 1; c < kSectionColumns; ++c)
-            if (columnHeight[c] < columnHeight[shortest])
-                shortest = c;
+    // Split the sections into three *contiguous* runs, one per column, and
+    // keep the split with the shortest tallest column.
+    //
+    // Contiguous is the point.  Dealing sections into whichever column
+    // balances best packs them tighter, but it reorders them -- and the order
+    // is signal flow, which is the one thing the grouping is for.  Reading
+    // column by column, a contiguous split preserves it exactly.
+    //
+    // Filling the shortest column as you go, which is what this did before,
+    // does neither: it reorders *and* it commits early, so it cannot see a
+    // tall section still to come and leaves one column a section short.
+    std::vector<int> best((size_t) n, 0);
+    int bestTallest = std::numeric_limits<int>::max();
+    int bestSpread = std::numeric_limits<int>::max();
 
-        const int h = kSectionHeader + 4
-                    + sections[i]->rowsNeeded(innerCols) * kControlHeight
-                    + kSectionBottomPad;
-        placements.push_back({ shortest, columnHeight[shortest], h });
-        columnHeight[shortest] += h;
+    for (int firstCut = 1; firstCut <= n; ++firstCut) {
+        for (int secondCut = firstCut; secondCut <= n; ++secondCut) {
+            int used[kSectionColumns] = {};
+            for (int i = 0; i < n; ++i) {
+                const int c = i < firstCut ? 0 : (i < secondCut ? 1 : 2);
+                used[c] += tall[(size_t) i];
+            }
+            int hi = 0, lo = std::numeric_limits<int>::max();
+            for (int c = 0; c < kSectionColumns; ++c) {
+                hi = juce::jmax(hi, used[c]);
+                lo = juce::jmin(lo, used[c]);
+            }
+            if (hi < bestTallest || (hi == bestTallest && hi - lo < bestSpread)) {
+                bestTallest = hi;
+                bestSpread = hi - lo;
+                for (int i = 0; i < n; ++i)
+                    best[(size_t) i] = i < firstCut ? 0 : (i < secondCut ? 1 : 2);
+            }
+        }
     }
 
-    int tallest = 0;
-    for (int c = 0; c < kSectionColumns; ++c)
-        tallest = juce::jmax(tallest, columnHeight[c]);
-    height = kHeaderHeight + 2 * kPad + tallest + kInfoBarHeight;
+    int columnHeight[kSectionColumns] = {};
+    placements.clear();
+    for (int i = 0; i < n; ++i) {
+        const int c = best[(size_t) i];
+        placements.push_back({ c, columnHeight[c], tall[(size_t) i] });
+        columnHeight[c] += tall[(size_t) i];
+    }
+
+    height = kHeaderHeight + 2 * kPad + bestTallest + kInfoBarHeight;
 }
 
 void PanelContent::resized()

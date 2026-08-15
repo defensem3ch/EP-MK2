@@ -184,8 +184,15 @@ inline juce::Colour sectionColour(const juce::String& section)
 
 inline juce::StringArray sectionOrder()
 {
-    // Signal flow, with the everyday controls first and tuning last.
-    return { "Output", "Hammer", "Tine", "Tone Bar", "Pickup", "Tremolo", "Tuning" };
+    // The two sections that are about the instrument as a whole, then signal
+    // flow: hammer, tine, the bar it is mounted on, the pickup, the amplifier.
+    //
+    // The editor lays these out as three contiguous runs, one per column, so
+    // this order is also the order they are read in -- and where the runs fall
+    // decides how even the columns come out.  Output and Tuning lead because
+    // they are the two that belong to no stage, and because putting them
+    // together is what lets the split land evenly.
+    return { "Output", "Tuning", "Hammer", "Tine", "Tone Bar", "Pickup", "Tremolo" };
 }
 
 inline float toLinear(const Spec& s, float value)
