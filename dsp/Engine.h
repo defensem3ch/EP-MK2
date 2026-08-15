@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "Scale.h"
 #include "Voice.h"
 
 namespace epmk2 {
@@ -28,6 +29,13 @@ struct EngineParams {
     float baseNote = 69.0f;
     float divisions = 12.0f;
     float interval = 2.0f;
+
+    // An unequal scale, when one is loaded, which overrides the two above.
+    // A bare pointer and a count rather than a container: this is read on the
+    // audio thread, and the processor publishes a fixed array it will not
+    // reallocate.  Null means the equal divisions still apply.
+    const double* scaleCents = nullptr;
+    int scaleDegrees = 0;
 
     // tremolo
     bool  tremoloOn = false;
@@ -89,9 +97,17 @@ public:
         dcBlockCoeff = float(1.0 - 2.0 * M_PI * 5.0 / sr);   // hip~ 5
     }
 
-    // The patch's tuning: interval^((note - baseNote) / divisions) * baseFreq.
+    // A loaded scale if there is one, otherwise the patch's own tuning:
+    // interval^((note - baseNote) / divisions) * baseFreq.
     float noteToFrequency(float midiNote, const EngineParams& p) const noexcept
     {
+        // A scale is a table of degrees, so it is indexed by whole steps from
+        // the base note.  Rounding is what a keyboard gives it either way.
+        if (p.scaleDegrees > 0)
+            return float(p.baseFreq
+                         * scaleRatio(p.scaleCents, p.scaleDegrees,
+                                      (int) std::lround(midiNote - p.baseNote)));
+
         if (p.divisions == 0.0f)
             return p.baseFreq;
         return float(std::pow((double)p.interval,

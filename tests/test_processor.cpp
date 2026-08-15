@@ -1091,6 +1091,108 @@ int main()
         proc.prepareToPlay(sr, block);
     }
 
+    // ---- tunings ---------------------------------------------------------
+    // The scale reaches the audio thread, survives a session, and is a
+    // different instrument from the equal divisions it replaces.
+    {
+        // What the engine actually sounds, measured rather than asserted from
+        // the table: render one note and find its fundamental.
+        auto pitchOf = [](EpMk2Processor& p, int note) {
+            const double sr = 48000.0;
+            const int n = 1 << 15;
+            // Clear whatever the last call left ringing.  A tone bar at
+            // Q 1750 sounds for seconds, so without this the note measured
+            // here competes with the note measured before it -- which is
+            // exactly how a passing test can measure the wrong note.
+            p.prepareToPlay(sr, 512);
+            juce::AudioBuffer<float> out(2, n);
+            out.clear();
+            juce::AudioBuffer<float> buf(2, 512);
+            juce::MidiBuffer midi;
+            midi.addEvent(juce::MidiMessage::noteOn(1, note, (juce::uint8) 100), 0);
+            for (int pos = 0; pos < n; pos += 512) {
+                buf.clear();
+                p.processBlock(buf, midi);
+                midi.clear();
+                out.copyFrom(0, pos, buf, 0, 0, 512);
+            }
+            // Goertzel over a range of candidate pitches, taking the strongest.
+            const float* x = out.getReadPointer(0);
+            double best = 0.0, bestPower = 0.0;
+            for (double f = 20.0; f < 2000.0; f *= 1.0005) {
+                const double w = 2.0 * M_PI * f / sr;
+                const double c = 2.0 * std::cos(w);
+                double s0 = 0.0, s1 = 0.0, s2 = 0.0;
+                for (int i = n / 8; i < n; ++i) { s0 = x[i] + c * s1 - s2; s2 = s1; s1 = s0; }
+                const double power = s1 * s1 + s2 * s2 - c * s1 * s2;
+                if (power > bestPower) { bestPower = power; best = f; }
+            }
+            return best;
+        };
+
+        EpMk2Processor proc;
+        proc.setPlayConfigDetails(0, 2, 48000.0, 512);
+        proc.prepareToPlay(48000.0, 512);
+
+        const double equal = pitchOf(proc, 73);      // C#5, four semitones up
+
+        epmk2::Scale meantone;
+        std::string err;
+        const auto& built = epmk2::builtInScales();
+        auto found = std::find_if(built.begin(), built.end(), [](const epmk2::BuiltInScale& b) {
+            return juce::String(b.name) == "Quarter-comma Meantone"; });
+        check(found != built.end() && epmk2::parseScl(found->scl, meantone, err),
+              "a built-in scale parses", err.empty() ? "" : ("  (" + err + ")").c_str());
+        meantone.name = "Quarter-comma Meantone";
+        proc.setScale(meantone);
+
+        // Quarter-comma meantone's C# is 76.049 cents above C, where 12-equal
+        // puts it at 100.  Base note 69 is A440, so note 73 is four steps up:
+        // meantone 386.314 cents against 400.
+        const double tempered = pitchOf(proc, 73);
+        const double moved = 1200.0 * std::log2(tempered / equal);
+        char tb[96];
+        snprintf(tb, sizeof tb, "  (moved %.1f cents, expected -13.7)", moved);
+        check(std::abs(moved - (386.314 - 400.0)) < 2.0,
+              "a scale retunes what the engine sounds", tb);
+
+        // A period is not always an octave, and the engine has to follow it.
+        epmk2::Scale bp;
+        auto bpIt = std::find_if(built.begin(), built.end(), [](const epmk2::BuiltInScale& b) {
+            return juce::String(b.name) == "Bohlen-Pierce"; });
+        epmk2::parseScl(bpIt->scl, bp, err);
+        bp.name = "Bohlen-Pierce";
+        proc.setScale(bp);
+        const double base = pitchOf(proc, 69), up13 = pitchOf(proc, 69 + 13);
+        char pb[96];
+        snprintf(pb, sizeof pb, "  (%.0f Hz -> %.0f Hz, ratio %.3f)", base, up13, up13 / base);
+        check(std::abs(up13 / base - 3.0) < 0.02,
+              "a scale with no octave repeats at its own period", pb);
+
+        // The session has to carry the table.  A path would not survive the
+        // project moving, and the file being edited would change the tuning.
+        juce::MemoryBlock saved;
+        proc.getStateInformation(saved);
+        EpMk2Processor restored;
+        restored.setPlayConfigDetails(0, 2, 48000.0, 512);
+        restored.prepareToPlay(48000.0, 512);
+        restored.setStateInformation(saved.getData(), (int) saved.getSize());
+        char sb[128];
+        snprintf(sb, sizeof sb, "  (%s, %d degrees)",
+                 restored.getScale().name.c_str(), restored.getScale().degrees());
+        check(restored.getScale().name == bp.name
+                  && restored.getScale().cents == bp.cents,
+              "the scale travels in the session", sb);
+        // And it must be *live* in the restored instance, not merely stored.
+        check(std::abs(pitchOf(restored, 69 + 13) / pitchOf(restored, 69) - 3.0) < 0.02,
+              "a restored scale is published, not just remembered");
+
+        // Back to no scale, and the equal divisions have to return.
+        proc.setScale({});
+        check(std::abs(pitchOf(proc, 73) - equal) < 0.5,
+              "clearing the scale restores the equal divisions");
+    }
+
     // ---- factory presets -------------------------------------------------
     // A preset that loads but sounds like the one before it is not a preset,
     // so each is measured for level and brightness rather than merely checked

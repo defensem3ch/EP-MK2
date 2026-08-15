@@ -158,6 +158,17 @@ inline void fillVertical(juce::Graphics& g, juce::Rectangle<float> r,
 constexpr int kInfoBarHeight = 52;
 constexpr int kSectionColumns = 3;
 
+// Well past any built-in scale's item id, so adding scales cannot collide
+// with the one item that is an action rather than a tuning.
+constexpr int kLoadItemId = 9000;
+
+// The scale chooser lives in the header strip.  Wide enough for the longest
+// built-in name plus the list's arrow.
+constexpr int kScaleLabelWidth = 56;
+constexpr int kScaleWidth      = 300;
+// Room the voice readout keeps at the right-hand end of the header.
+constexpr int kVoiceCountWidth = 110;
+
 // Derived, not chosen.  A section holds kInnerColumns controls with a gutter
 // between each and one at either end; the panel holds kSectionColumns sections
 // the same way.  The assert is what stops kDesignWidth, which has to be in the
@@ -171,10 +182,9 @@ static_assert(EpMk2Editor::kDesignWidth
 
 //==============================================================================
 ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec& spec)
-    : label(spec.panelName()), fullName(spec.name), help(spec.help),
+    : PanelCell(spec.panelName(), spec.name, spec.help),
       isToggle(spec.unit == Unit::Toggle)
 {
-    setName(spec.name);
     if (isToggle) {
         button.setColour(juce::ToggleButton::tickColourId,
                          sectionColour(spec.section).withMultipliedSaturation(1.15f));
@@ -206,19 +216,34 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
     }
 }
 
-void ParamControl::mouseEnter(const juce::MouseEvent&)
+PanelCell::PanelCell(const juce::String& drawn, const juce::String& full,
+                     const juce::String& helpText)
+    : label(drawn), fullName(full), help(helpText)
+{
+    setName(full);
+}
+
+void PanelCell::mouseEnter(const juce::MouseEvent&)
 {
     if (auto* panel = findParentComponentOfClass<PanelContent>())
         panel->showHelp(fullName, help);
 }
 
-void ParamControl::mouseExit(const juce::MouseEvent&)
+void PanelCell::mouseExit(const juce::MouseEvent&)
 {
     if (auto* panel = findParentComponentOfClass<PanelContent>())
         panel->showHelp({}, {});
 }
 
-void ParamControl::paint(juce::Graphics& g)
+juce::Rectangle<int> PanelCell::contentArea() const
+{
+    auto r = getLocalBounds();
+    r.removeFromTop(kCellPad + kLabelArea + kKnobTop);
+    r.removeFromBottom(kCellPad);
+    return r;
+}
+
+void PanelCell::paint(juce::Graphics& g)
 {
     // A tint behind each control, so label, knob and value read as one object.
     // Without it the value box sits at the bottom of its cell with the next
@@ -256,9 +281,7 @@ void ParamControl::paint(juce::Graphics& g)
 
 void ParamControl::resized()
 {
-    auto r = getLocalBounds();
-    r.removeFromTop(kCellPad + kLabelArea + kKnobTop);
-    r.removeFromBottom(kCellPad);       // r is the knob and its value box
+    auto r = contentArea();             // the knob and its value box
 
     if (isToggle)
         // In the knobs' own band, so a toggle sits on the row rather than
@@ -278,7 +301,157 @@ void ParamControl::resized()
 }
 
 //==============================================================================
-ParamSection::ParamSection(juce::AudioProcessorValueTreeState& tree, const juce::String& name)
+// The tuning's scale chooser.  Not a parameter: it picks a table of steps,
+// not a number, so there is nothing for a host to automate and nothing
+// sensible for it to interpolate between.
+ScaleCell::ScaleCell(EpMk2Processor& p)
+    : proc(p)
+{
+    box.addItem("Equal Divisions", 1);
+    int id = 2;
+    for (const auto& b : epmk2::builtInScales())
+        box.addItem(b.name, id++);
+    box.addSeparator();
+    box.addItem("Load .scl file...", kLoadItemId);
+
+    box.setColour(juce::ComboBox::backgroundColourId, juce::Colour(col::valueBox));
+    box.setColour(juce::ComboBox::textColourId, juce::Colours::white);
+    box.setColour(juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
+    box.setColour(juce::ComboBox::arrowColourId, juce::Colour(0xffb0b0b0));
+    box.setJustificationType(juce::Justification::centred);
+    box.onChange = [this] { chosen(); };
+
+    addAndMakeVisible(box);
+    box.addMouseListener(this, true);
+    refresh();
+}
+
+void ScaleCell::resized()
+{
+    auto r = getLocalBounds();
+    r.removeFromLeft(kScaleLabelWidth);
+    box.setBounds(r.withSizeKeepingCentre(r.getWidth(), kValueBox + 4));
+}
+
+void ScaleCell::paint(juce::Graphics& g)
+{
+    g.setColour(juce::Colour(0xff9a9a9a));
+    g.setFont(panelFont(kLabelFont));
+    g.drawText("SCALE", getLocalBounds().removeFromLeft(kScaleLabelWidth),
+               juce::Justification::centredLeft);
+}
+
+void ScaleCell::mouseEnter(const juce::MouseEvent&)
+{
+    if (auto* panel = findParentComponentOfClass<PanelContent>())
+        panel->showHelp("Tuning Scale",
+            "The tuning the keyboard is laid out in. Equal Divisions uses the "
+            "Divisions and Interval controls in the Tuning section; everything else "
+            "is an unequal scale, where the steps are not all the same size, so a "
+            "chord sounds different depending which key it is played from. Load .scl "
+            "reads a Scala file, which is what Scale Workshop exports.");
+}
+
+void ScaleCell::mouseExit(const juce::MouseEvent&)
+{
+    if (auto* panel = findParentComponentOfClass<PanelContent>())
+        panel->showHelp({}, {});
+}
+
+void ScaleCell::refresh()
+{
+    const juce::String name(proc.getScale().name);
+    if (synced && name == showing)
+        return;
+    showing = name;
+    synced = true;
+
+    // dontSendNotification: this is reporting what the processor already has,
+    // and telling onChange about it would load it a second time.
+    if (name.isEmpty()) {
+        box.setSelectedId(1, juce::dontSendNotification);
+        return;
+    }
+    for (int i = 0; i < box.getNumItems(); ++i)
+        if (box.getItemText(i) == name) {
+            box.setSelectedId(box.getItemId(i), juce::dontSendNotification);
+            return;
+        }
+    // A scale loaded from a file, which is not in the list.  Show its name
+    // without adding it, so the list stays what it is.
+    box.setText(name, juce::dontSendNotification);
+}
+
+void ScaleCell::chosen()
+{
+    const int id = box.getSelectedId();
+    if (id == kLoadItemId) {
+        loadFile();
+        return;
+    }
+    if (id == 1) {
+        proc.setScale({});
+        showing = {};
+        synced = true;
+        return;
+    }
+
+    const auto& built = epmk2::builtInScales();
+    const size_t index = (size_t) (id - 2);
+    if (index >= built.size())
+        return;
+
+    epmk2::Scale s;
+    std::string error;
+    if (! epmk2::parseScl(built[index].scl, s, error)) {
+        // A built-in that does not parse is a build problem, not a user one.
+        jassertfalse;
+        return;
+    }
+    // The description line inside the file is prose; the list's name is what
+    // the panel and the session should agree on.
+    s.name = built[index].name;
+    proc.setScale(s);
+    showing = juce::String(s.name);
+    synced = true;
+}
+
+void ScaleCell::loadFile()
+{
+    // Put the box back to what is loaded straight away: the chooser is async,
+    // and leaving "Load .scl file..." showing while it is open reads as though
+    // that were the tuning.
+    synced = false;
+    refresh();
+
+    chooser = std::make_unique<juce::FileChooser>(
+        "Load a Scala scale", juce::File(), "*.scl");
+    chooser->launchAsync(juce::FileBrowserComponent::openMode
+                             | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& fc) {
+            const auto file = fc.getResult();
+            if (file == juce::File())
+                return;
+
+            epmk2::Scale s;
+            std::string error;
+            if (! epmk2::parseScl(file.loadFileAsString().toStdString(), s, error)) {
+                juce::NativeMessageBox::showMessageBoxAsync(
+                    juce::MessageBoxIconType::WarningIcon,
+                    "Could not read " + file.getFileName(), error);
+                return;
+            }
+            // The file's own description is usually blank or a credit line,
+            // so the file name is the more useful label.
+            s.name = file.getFileNameWithoutExtension().toStdString();
+            proc.setScale(s);
+            synced = false;
+            refresh();
+        });
+}
+
+ParamSection::ParamSection(juce::AudioProcessorValueTreeState& tree,
+                           const juce::String& name)
     : title(name), colour(sectionColour(name))
 {
     setName(name);
@@ -480,11 +653,12 @@ PanelContent::~PanelContent()
 }
 
 PanelContent::PanelContent(EpMk2Processor& p, juce::AudioProcessorValueTreeState& tree)
-    : proc(p)
+    : proc(p), scaleCell(p)
 {
     setLookAndFeel(&lookAndFeel);
     for (const auto& name : sectionOrder())
         addAndMakeVisible(sections.add(new ParamSection(tree, name)));
+    addAndMakeVisible(scaleCell);
 
     computeLayout();
 }
@@ -496,6 +670,11 @@ void PanelContent::showHelp(const juce::String& name, const juce::String& text)
     helpName = name;
     helpText = text;
     repaint(getLocalBounds().removeFromBottom(kInfoBarHeight));
+}
+
+void PanelContent::refreshScale()
+{
+    scaleCell.refresh();
 }
 
 void PanelContent::setVoiceCount(int n)
@@ -694,7 +873,13 @@ void PanelContent::computeLayout()
 void PanelContent::resized()
 {
     auto r = getLocalBounds();
-    r.removeFromTop(kHeaderHeight);
+
+    // The chooser sits in the header, right-aligned before the voice count.
+    auto header = r.removeFromTop(kHeaderHeight).reduced(kGutter * 2, 0);
+    header.removeFromRight(kVoiceCountWidth);
+    scaleCell.setBounds(header.removeFromRight(kScaleLabelWidth + kScaleWidth)
+                              .withSizeKeepingCentre(kScaleLabelWidth + kScaleWidth,
+                                                     kKnobArea / 2));
     r.removeFromBottom(kInfoBarHeight);
     r.reduce(kGutter, kGutter);
 
@@ -755,6 +940,10 @@ EpMk2Editor::~EpMk2Editor()
 void EpMk2Editor::timerCallback()
 {
     content.setVoiceCount(proc.getActiveVoiceCount());
+    // The scale can change without the panel doing it -- loading a session is
+    // the usual way -- and unlike every other control it is not attached to a
+    // parameter, so nothing reports it.
+    content.refreshScale();
 }
 
 void EpMk2Editor::paint(juce::Graphics& g)

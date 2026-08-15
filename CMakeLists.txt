@@ -82,6 +82,13 @@ target_link_libraries(EPMK2_tests
     PUBLIC  juce::juce_recommended_config_flags)
 
 # ---------------------------------------------------------------------------
+# The .scl parser, tested on its own.  No JUCE and no plugin: it is a pure
+# function over a string, and keeping it that way is what makes the malformed
+# cases cheap to cover.
+add_executable(EPMK2_scaletest tests/test_scale.cpp)
+set_target_properties(EPMK2_scaletest PROPERTIES OUTPUT_NAME "epmk2-scaletest")
+
+# ---------------------------------------------------------------------------
 # Offline MIDI player: renders a performance and reports cost and glitches.
 juce_add_console_app(EPMK2_playmidi PRODUCT_NAME "epmk2-playmidi")
 

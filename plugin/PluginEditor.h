@@ -8,17 +8,18 @@ class EpMk2Processor;
 
 // One labelled control, bound to a parameter.  Toggles get a button, anything
 // else gets a rotary with a value box.
-class ParamControl : public juce::Component
+// One cell on the panel: a name, something to operate, and a tinted block
+// behind the two so they read as one object.  Most cells are a parameter, but
+// the tuning's scale chooser is not one -- it picks a table, not a number --
+// and a section has to be able to hold it alongside the rest.
+class PanelCell : public juce::Component
 {
 public:
-    ParamControl(juce::AudioProcessorValueTreeState& tree, const epmk2::params::Spec& spec);
+    explicit PanelCell(const juce::String& drawn, const juce::String& full,
+                       const juce::String& helpText);
 
-    void resized() override;
     void paint(juce::Graphics&) override;
 
-    // Hovering anywhere on the control, including its slider, puts its help in
-    // the panel's info bar.  The slider covers most of the cell, so this class
-    // listens to it rather than relying on its own mouse events.
     void mouseEnter(const juce::MouseEvent&) override;
     void mouseExit(const juce::MouseEvent&) override;
 
@@ -26,6 +27,11 @@ public:
     // the short one is drawn, the full one is what the info bar reports.
     const juce::String& drawnName() const { return label; }
     const juce::String& infoName()  const { return fullName; }
+
+protected:
+    // The part of the cell below the name, which is where a subclass puts
+    // whatever the cell actually operates.
+    juce::Rectangle<int> contentArea() const;
 
 private:
     // What the panel draws, and what the info bar says.  They differ wherever
@@ -35,6 +41,54 @@ private:
     juce::String label;
     juce::String fullName;
     juce::String help;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PanelCell)
+};
+
+// The tuning's scale chooser: the built-in scales, and a way to load a .scl.
+//
+// In the header rather than in the Tuning section, for two reasons.  It is
+// not a parameter -- it picks a table of steps, so there is nothing for a
+// host to automate and nothing sensible to interpolate between -- and a fifth
+// control in Tuning would take that section to two rows, which puts every
+// column's rows off the grid they share across the panel.
+class ScaleCell : public juce::Component
+{
+public:
+    explicit ScaleCell(EpMk2Processor&);
+
+    void resized() override;
+    void paint(juce::Graphics&) override;
+    void mouseEnter(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
+    // The scale can change without this cell doing it -- loading a session
+    // is the usual way -- so the chooser is told what to show rather than
+    // assuming it still shows what it last chose.
+    void refresh();
+
+private:
+    void chosen();
+    void loadFile();
+
+    EpMk2Processor& proc;
+    juce::ComboBox box;
+    std::unique_ptr<juce::FileChooser> chooser;
+    juce::String showing;
+    // The first refresh has to run even though `showing` already agrees with
+    // the processor: both are empty, and the box has nothing selected yet.
+    bool synced = false;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScaleCell)
+};
+
+class ParamControl : public PanelCell
+{
+public:
+    ParamControl(juce::AudioProcessorValueTreeState& tree, const epmk2::params::Spec& spec);
+
+    void resized() override;
+
+private:
     bool isToggle;
 
     juce::Slider slider;
@@ -71,7 +125,7 @@ public:
 private:
     juce::String title;
     juce::Colour colour;
-    juce::OwnedArray<ParamControl> controls;
+    juce::OwnedArray<PanelCell> controls;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ParamSection)
 };
@@ -122,6 +176,10 @@ public:
     void resized() override;
 
     void setVoiceCount(int n);
+    // The scale can change without the panel doing it -- loading a session is
+    // the usual way -- and unlike every other control it is not attached to a
+    // parameter, so nothing reports it.
+    void refreshScale();
     void showHelp(const juce::String& name, const juce::String& text);
 
     // The panel is as tall as its contents need at the design width.  Deriving
@@ -141,6 +199,7 @@ private:
 
     EpMk2Processor& proc;
     juce::OwnedArray<ParamSection> sections;
+    ScaleCell scaleCell;
     std::vector<Placement> placements;
     juce::String helpName, helpText;
     int height = 0;

@@ -54,6 +54,11 @@ public:
 
     bool isBusesLayoutSupported(const BusesProperties&) const { return true; }
 
+    // The tuning, when it is not the equal divisions the parameters describe.
+    // An empty scale means it is.  Message thread only.
+    const epmk2::Scale& getScale() const noexcept { return scale; }
+    void setScale(const epmk2::Scale&);
+
 private:
     void handleMidi(const juce::MidiMessage& m);
     // The pedal can be put down by MIDI CC64 or by the panel toggle, and the
@@ -81,6 +86,28 @@ private:
 
     epmk2::Engine engine;
     epmk2::EngineParams params;
+
+    // The scale, published to the audio thread without a lock.
+    //
+    // The audio thread reads a plain array it is handed a pointer to, so
+    // nothing it is reading can be reallocated underneath it.  Three slots
+    // rather than two: with two, a second change arriving while a block was
+    // still running would land in the very slot that block is reading.  The
+    // writer round-robins, so a slot cannot come up again until two further
+    // changes have happened, which at the speed a person picks a tuning is
+    // never.
+    //
+    // 1024 is the parser's own limit on degrees, so a parsed scale always
+    // fits and the audio thread never has to check.
+    struct ScaleSlot {
+        double cents[1024] = {};
+        int degrees = 0;
+    };
+    ScaleSlot scaleSlots[3];
+    std::atomic<int> liveScale { -1 };   // -1 until a scale is loaded
+    int nextScaleSlot = 0;
+
+    epmk2::Scale scale;   // the message thread's copy: name, and for the state
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EpMk2Processor)
 };

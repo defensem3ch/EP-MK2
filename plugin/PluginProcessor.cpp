@@ -91,6 +91,38 @@ void EpMk2Processor::saveEditorSize(int width, int height)
     settings->setEditorSize(width, height);
 }
 
+// The scale travels in the session, not as a path to the file it came from.
+// A path is fragile -- it breaks when the project moves machines, and it is
+// wrong the moment the file is edited -- and the table is a few hundred bytes.
+static const juce::Identifier kScaleName("scaleName"), kScaleCents("scaleCents");
+
+void EpMk2Processor::setScale(const epmk2::Scale& s)
+{
+    scale = s;
+
+    if (s.empty()) {
+        liveScale.store(-1, std::memory_order_release);
+    } else {
+        const int slot = nextScaleSlot;
+        nextScaleSlot = (nextScaleSlot + 1) % 3;
+
+        auto& dst = scaleSlots[slot];
+        const int n = juce::jmin(s.degrees(), (int) std::size(dst.cents));
+        for (int i = 0; i < n; ++i)
+            dst.cents[i] = s.cents[(size_t) i];
+        dst.degrees = n;
+        // Published last: the audio thread must not be able to see the count
+        // before the values it counts.
+        liveScale.store(slot, std::memory_order_release);
+    }
+
+    juce::StringArray cents;
+    for (double c : s.cents)
+        cents.add(juce::String(c, 6));
+    state.state.setProperty(kScaleName, juce::String(s.name), nullptr);
+    state.state.setProperty(kScaleCents, cents.joinIntoString(","), nullptr);
+}
+
 void EpMk2Processor::getStateInformation(juce::MemoryBlock& destData)
 {
     if (auto xml = state.copyState().createXml())
@@ -102,6 +134,17 @@ void EpMk2Processor::setStateInformation(const void* data, int sizeInBytes)
     if (auto xml = getXmlFromBinary(data, sizeInBytes))
         if (xml->hasTagName(state.state.getType()))
             state.replaceState(juce::ValueTree::fromXml(*xml));
+
+    // Rebuild the tuning from the restored tree.  Going back through setScale
+    // is what publishes it to the audio thread; setting the properties alone
+    // would restore a session that looks right and plays in 12-equal.
+    epmk2::Scale restored;
+    restored.name = state.state.getProperty(kScaleName, juce::String()).toString().toStdString();
+    const auto cents = state.state.getProperty(kScaleCents, juce::String()).toString();
+    for (const auto& c : juce::StringArray::fromTokens(cents, ",", ""))
+        if (c.isNotEmpty())
+            restored.cents.push_back(c.getDoubleValue());
+    setScale(restored);
 }
 
 void EpMk2Processor::prepareToPlay(double sampleRate, int)
@@ -163,6 +206,16 @@ void EpMk2Processor::processBlock(juce::AudioBuffer<float>& buffer,
     // fold CC64 back in before anything is rendered.
     paramSustain = params.voice.sustainPedal;
     updatePedal();
+
+    // Point at whichever scale slot is live, once, so the whole block uses one
+    // tuning even if the message thread publishes another halfway through it.
+    if (const int live = liveScale.load(std::memory_order_acquire); live >= 0) {
+        params.scaleCents = scaleSlots[live].cents;
+        params.scaleDegrees = scaleSlots[live].degrees;
+    } else {
+        params.scaleCents = nullptr;
+        params.scaleDegrees = 0;
+    }
 
     const int numSamples = buffer.getNumSamples();
     buffer.clear();
