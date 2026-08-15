@@ -12,6 +12,7 @@
 
 #include "../plugin/PluginProcessor.h"
 #include "../plugin/PluginEditor.h"
+#include "../plugin/Presets.h"
 
 namespace {
 
@@ -1534,6 +1535,89 @@ int main()
         proc.setScale({});
         check(std::abs(pitchOf(proc, 73) - equal) < 0.5,
               "clearing the scale restores the equal divisions");
+    }
+
+    // ---- what the presets claim to be -------------------------------------
+    // A preset is a claim, and the claims are checkable without an ear.  Both
+    // of the things checked here were wrong when it was written: Kalimba sat
+    // flat against the limiter on every note, and the Wurlitzer's bark -- the
+    // one thing that makes it a Wurlitzer -- was pointing the wrong way.
+    {
+        auto render = [](int preset, int note, std::vector<float>& out) {
+            const double sr = 48000.0;
+            const int block = 512, total = (int) (2.0 * sr);
+            EpMk2Processor proc;
+            proc.setPlayConfigDetails(0, 2, sr, block);
+            proc.prepareToPlay(sr, block);
+            epmk2::presets::apply(proc.getState(), preset);
+            if (auto* p = proc.getState().getParameter("key_var"))
+                p->setValueNotifyingHost(0.0f);
+            if (auto* p = proc.getState().getParameter("strike_var"))
+                p->setValueNotifyingHost(0.0f);
+
+            juce::MidiBuffer midi;
+            midi.addEvent(juce::MidiMessage::noteOn(1, note, (juce::uint8) 127), 0);
+            juce::AudioBuffer<float> buf(2, block);
+            out.assign((size_t) total, 0.0f);
+            for (int pos = 0; pos < total; pos += block) {
+                buf.clear();
+                proc.processBlock(buf, midi);
+                midi.clear();
+                for (int i = 0; i < block && pos + i < total; ++i)
+                    out[(size_t) (pos + i)] = buf.getSample(0, i);
+            }
+        };
+
+        auto level = [](const std::vector<float>& x, double sr, double f) {
+            const double w = 2.0 * M_PI * f / sr, c = 2.0 * std::cos(w);
+            double s1 = 0.0, s2 = 0.0;
+            for (float v : x) { const double s0 = v + c * s1 - s2; s2 = s1; s1 = s0; }
+            return 10.0 * std::log10(std::max(1e-24, s1*s1 + s2*s2 - c*s1*s2));
+        };
+
+        // Nothing should ship pressed against the limiter.  A preset that
+        // does has no dynamics left at the top of its range, and every note
+        // measures the same peak because the peak is the limiter, not the
+        // note.
+        int clipping = 0;
+        juce::String loudest;
+        double worstPeak = -99.0;
+        for (int i = 0; i < (int) epmk2::presets::table().size(); ++i) {
+            std::vector<float> x;
+            render(i, 52, x);
+            double peak = 0.0;
+            for (float v : x) peak = juce::jmax(peak, (double) std::abs(v));
+            const double db = 20.0 * std::log10(juce::jmax(1e-9, peak));
+            if (db > worstPeak) { worstPeak = db; loudest = epmk2::presets::table()[(size_t) i].name; }
+            if (db > -2.0) ++clipping;
+        }
+        char pb[128];
+        snprintf(pb, sizeof pb, "  (loudest is %s at %.1f dB)",
+                 loudest.toRawUTF8(), worstPeak);
+        check(clipping == 0, "no preset ships against the limiter", pb);
+
+        // A Wurlitzer's bark is even harmonics -- the reed sitting near the
+        // pickup's magnetic axis -- and a Rhodes' is not.  This is the single
+        // measurement that separates the two, so it is the one worth pinning.
+        auto evenMinusOdd = [&](const char* name) {
+            const auto& t = epmk2::presets::table();
+            int index = 0;
+            for (size_t i = 0; i < t.size(); ++i)
+                if (juce::String(t[i].name) == name) index = (int) i;
+            std::vector<float> x;
+            render(index, 52, x);
+            const double f0 = 440.0 * std::pow(2.0, (52 - 69) / 12.0);
+            const double base = level(x, 48000.0, f0);
+            return ((level(x, 48000.0, f0 * 2) + level(x, 48000.0, f0 * 4)) -
+                    (level(x, 48000.0, f0 * 3) + level(x, 48000.0, f0 * 5))) / 2.0;
+            juce::ignoreUnused(base);
+        };
+        const double wurly = evenMinusOdd("Wurlitzer");
+        const double rhodes = evenMinusOdd("Rhodes MkI");
+        char wb[128];
+        snprintf(wb, sizeof wb, "  (Wurlitzer %+.1f dB, Rhodes %+.1f dB)", wurly, rhodes);
+        check(wurly > 0.0 && wurly > rhodes + 6.0,
+              "the Wurlitzer barks on even harmonics and the Rhodes does not", wb);
     }
 
     // ---- factory presets -------------------------------------------------

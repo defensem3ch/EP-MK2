@@ -114,7 +114,7 @@ sat permanently saturated.
 * The top octave loses its inharmonic content, because a 0.4 ms contact cannot
   excite 7.1× of 1760 Hz. Physically reasonable, but worth checking against the
   benchmark.
-* **The factory presets were tuned against the old excitation** and want
+* **The factory presets were re-voiced against measurement** (see below) and want
   revisiting.
 
 ### 1.2 Sub-fundamental — **done, from measurement**

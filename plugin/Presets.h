@@ -34,11 +34,17 @@ struct Preset {
 // and the sustain pedal are the player's, not the preset's: changing timbre
 // should not retune the instrument, move the output level, alter the CPU
 // budget, or stick the pedal down.
+//
+// The pitch wheel and the mod wheel are the player's for a sharper reason:
+// something else is already driving them.  A preset that reset them would be
+// fighting a controller for ownership, and a patch change in the middle of a
+// held bend would snap the note straight.  This is the same rule the sustain
+// pedal has had since CC64 was fixed.
 inline bool inPresetScope(const juce::String& id)
 {
-    return id != "bass_freq" && id != "base_note" && id != "divisions"
-        && id != "interval"  && id != "sustain"   && id != "master"
-        && id != "polyphony";
+    return id != "bass_freq"  && id != "base_note" && id != "divisions"
+        && id != "interval"   && id != "sustain"   && id != "master"
+        && id != "polyphony"  && id != "pitch_bend" && id != "vib_depth";
 }
 
 inline const std::vector<Preset>& table()
@@ -72,10 +78,11 @@ inline const std::vector<Preset>& table()
         { "Rhodes Bright", {
             { "hammer_contact",   0.22f },
             { "tine_send",      -62.0f },
-            { "tine_level",      -3.0f },
+            { "tine_level",      -9.0f },
             { "pickup_lopass", 6000.0f },
             { "pickup_offset",    0.55f },
-            { "pickup_gain",     12.0f },
+            { "pickup_gain",      8.0f },
+            { "pickup_level",     0.0f },
         }},
 
         // A reed, not a rod, and no tone bar.  A flat cantilever's ideal mode
@@ -87,12 +94,21 @@ inline const std::vector<Preset>& table()
             { "tine_ratio2",     17.55f },
             { "tine_decay",     180.0f },
             { "tine_send",      -58.0f },
-            { "tine_level",      -4.0f },
+            { "tine_level",     -12.0f },
             { "hammer_contact",   0.30f },
             { "tone_decay",     900.0f },
             { "sub_level",     -100.0f },
-            { "pickup_gain",     11.0f },
-            { "pickup_offset",    0.40f },
+            // 0.40 was measured putting the *odd* harmonics 11 dB above the
+            // even ones -- further from a Wurlitzer than the Rhodes is, and
+            // the opposite of what the comment above claims.  0.15 puts the
+            // evens 3.5 dB up, which is the bark.  Below about 0.10 the
+            // second harmonic reaches the fundamental and the note stops
+            // having a pitch.
+            { "pickup_offset",    0.15f },
+            // The drive stays high, because a Wurlitzer's nonlinearity is the
+            // point; the level comes off the output instead.
+            { "pickup_gain",      8.0f },
+            { "pickup_level",    -6.0f },
             { "pickup_distance",  0.55f },
             { "pickup_lopass", 3000.0f },
         }},
@@ -114,6 +130,11 @@ inline const std::vector<Preset>& table()
             { "pickup_gain",     16.0f },
             { "pickup_offset",    0.65f },
             { "pickup_lopass", 7000.0f },
+            { "pickup_level",     0.0f },
+            // A plucked string has no buzzing pickup behind it.  Left in, the
+            // fourth-power term ran away on the very short contact this uses
+            // and pinned every note against the limiter.
+            { "buzz_level",    -100.0f },
         }},
 
         // Bars are undercut so the first overtone is exactly 4x (a free bar's
@@ -146,14 +167,15 @@ inline const std::vector<Preset>& table()
             { "tine_ratio2",     17.5f },
             { "tine_decay",     300.0f },
             { "tine_send",      -56.0f },
-            { "tine_level",      -5.0f },
+            { "tine_level",     -12.0f },
             { "hammer_contact",   0.50f },
             { "tone_decay",     400.0f },
             { "tone_level",      -6.0f },
             { "sub_level",      -60.0f },
-            { "pickup_gain",     18.5f },
+            { "pickup_gain",     12.0f },
             { "pickup_offset",    0.70f },
             { "pickup_lopass", 4000.0f },
+            { "pickup_level",    -4.0f },
         }},
     };
     return t;

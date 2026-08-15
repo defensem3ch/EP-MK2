@@ -468,8 +468,14 @@ public:
         // input instead leaves the +6 dB/octave running unopposed, and the top
         // of the keyboard drives the limiter.
         const float coil = pickupLowpass.process(induced);
+        // Pickup Level scales the buzz too.  It used to be added after the
+        // level was applied, which made it the one part of the pickup that
+        // the pickup's own level control could not touch -- and being a
+        // fourth power, it is the part most able to run away.  Turning the
+        // pickup down on a hard-driven preset moved nothing, because what was
+        // left was all buzz.
         const float buzz = buzzFourth(coil) * p.buzzPhase * p.buzzLevelLin;
-        const float pickupOut = bodyHighpass.process(coil * p.pickupLevelLin + buzz);
+        const float pickupOut = bodyHighpass.process((coil + buzz) * p.pickupLevelLin);
 
         // --- sum and output ------------------------------------------------
         const float mix = strike * p.hammerLevelLin
