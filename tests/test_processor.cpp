@@ -1091,6 +1091,154 @@ int main()
         proc.prepareToPlay(sr, block);
     }
 
+    // ---- does every control do anything? ---------------------------------
+    // A knob that moves and changes nothing is worse than a missing one: it
+    // invites a listener to imagine a difference.  This renders the same
+    // performance at each parameter's two extremes and asks whether the audio
+    // came out different at all -- not whether it changed by the right amount,
+    // just whether the control is connected to anything.
+    {
+        auto renderWith = [](const char* id, float value, std::vector<float>& out) {
+            const double sr = 48000.0;
+            const int block = 512;
+            const int held = (int) (0.35 * sr), total = held + (int) (0.25 * sr);
+
+            EpMk2Processor proc;
+            proc.setPlayConfigDetails(0, 2, sr, block);
+            proc.prepareToPlay(sr, block);
+            // Tremolo on, so the tremolo controls are live rather than
+            // downstream of a switch that is off.
+            if (auto* t = proc.getState().getParameter("trem_on"))
+                t->setValueNotifyingHost(1.0f);
+            if (auto* p = proc.getState().getParameter(id))
+                p->setValueNotifyingHost(p->convertTo0to1(value));
+
+            // A chord rather than a note: polyphony, sympathetic coupling and
+            // the stereo tremolo all need more than one voice to show.  Low
+            // enough that none of the tine modes are past Nyquist.
+            juce::MidiBuffer midi;
+            for (int n : { 40, 47, 52, 56, 59, 64 })
+                midi.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8) 100), 0);
+
+            // Both channels, laid end to end.  Stereo is the reason: it
+            // swings the two in antiphase against a mono tremolo that moves
+            // them together, and the left channel alone comes out the same
+            // either way -- so reading one channel called it a dead control.
+            out.assign((size_t) total * 2, 0.0f);
+            juce::AudioBuffer<float> buf(2, block);
+            for (int pos = 0; pos < total; pos += block) {
+                const int n = juce::jmin(block, total - pos);
+                buf.setSize(2, n, false, false, true);
+                buf.clear();
+                // Released partway, so note-off, the damper and the pedal are
+                // all exercised.
+                if (pos <= held && pos + n > held)
+                    for (int k : { 40, 47, 52, 56, 59, 64 })
+                        midi.addEvent(juce::MidiMessage::noteOff(1, k),
+                                      juce::jlimit(0, n - 1, held - pos));
+                proc.processBlock(buf, midi);
+                midi.clear();
+                for (int i = 0; i < n; ++i) {
+                    out[(size_t) (pos + i)] = buf.getSample(0, i);
+                    out[(size_t) (total + pos + i)] = buf.getSample(1, i);
+                }
+            }
+        };
+
+        int dead = 0;
+        juce::String deadNames;
+        std::vector<std::pair<double, juce::String>> effect;
+        for (const auto& sp : epmk2::params::table()) {
+            std::vector<float> lo, hi;
+            renderWith(sp.id, sp.min, lo);
+            renderWith(sp.id, sp.max, hi);
+
+            double diff = 0.0, level = 0.0;
+            for (size_t i = 0; i < lo.size(); ++i) {
+                diff = juce::jmax(diff, (double) std::abs(lo[i] - hi[i]));
+                level = juce::jmax(level, (double) std::abs(lo[i]));
+            }
+            // A thousandth of the signal: below that it is not a control, it
+            // is a rounding difference.
+            if (! (diff > level * 1.0e-3)) {
+                ++dead;
+                deadNames += (deadNames.isEmpty() ? "" : ", ") + juce::String(sp.name);
+            }
+            effect.push_back({ 20.0 * std::log10(juce::jmax(1e-12, diff / juce::jmax(1e-12, level))),
+                               juce::String(sp.name) });
+        }
+        // The weakest few, always: a control can be connected and still be
+        // doing almost nothing, and that is worth seeing before it is
+        // reported as broken by someone playing it.
+        std::sort(effect.begin(), effect.end(),
+                  [](const auto& a, const auto& b) { return a.first < b.first; });
+        juce::String weakest;
+        for (size_t i = 0; i < 3 && i < effect.size(); ++i)
+            weakest += (i ? ", " : "") + effect[i].second
+                     + juce::String::formatted(" %.0f dB", effect[i].first);
+
+        char cb[320];
+        snprintf(cb, sizeof cb, "  (%d of %d do nothing%s%s; weakest %s)", dead,
+                 (int) epmk2::params::table().size(),
+                 dead ? ": " : "", dead ? deadNames.toRawUTF8() : "",
+                 weakest.toRawUTF8());
+        check(dead == 0, "every control changes the sound", cb);
+    }
+
+    // ---- what carries the sound -------------------------------------------
+    // Tone Level and Tine Level are the *direct* paths -- the tone bar and the
+    // tine mixed straight to the output, bypassing the pickup.  A real Rhodes
+    // has no such thing; they are inherited from the Pd model and kept because
+    // the keyboard's evenness measurably depends on them (roadmap 4.6).
+    //
+    // The consequence is not obvious from the names: turning both down does
+    // not silence the instrument, because the pickup is still carrying the
+    // same tone bar and tine.  This pins that down as a fact rather than a
+    // surprise, and reports what each path is worth.
+    {
+        auto levelWith = [](std::initializer_list<std::pair<const char*, float>> set) {
+            const double sr = 48000.0;
+            const int block = 512, total = (int) (0.5 * sr);
+            EpMk2Processor proc;
+            proc.setPlayConfigDetails(0, 2, sr, block);
+            proc.prepareToPlay(sr, block);
+            for (auto& kv : set)
+                if (auto* p = proc.getState().getParameter(kv.first))
+                    p->setValueNotifyingHost(p->convertTo0to1(kv.second));
+
+            juce::MidiBuffer midi;
+            for (int n : { 40, 52, 59 })
+                midi.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8) 100), 0);
+
+            juce::AudioBuffer<float> buf(2, block);
+            double peak = 0.0;
+            for (int pos = 0; pos < total; pos += block) {
+                buf.clear();
+                proc.processBlock(buf, midi);
+                midi.clear();
+                peak = juce::jmax(peak, (double) buf.getMagnitude(0, buf.getNumSamples()));
+            }
+            return 20.0 * std::log10(juce::jmax(1e-9, peak));
+        };
+
+        const double all      = levelWith({});
+        const double noTone   = levelWith({ { "tone_level", -100.0f } });
+        const double noTine   = levelWith({ { "tine_level", -100.0f } });
+        const double neither  = levelWith({ { "tone_level", -100.0f }, { "tine_level", -100.0f } });
+        const double noPickup = levelWith({ { "pickup_level", -100.0f } });
+
+        char rb[240];
+        snprintf(rb, sizeof rb,
+                 "  (full %.1f dB; without tone %+.1f, tine %+.1f, both %+.1f,"
+                 " pickup %+.1f)",
+                 all, noTone - all, noTine - all, neither - all, noPickup - all);
+        // Both direct paths off must still sound, and the pickup off must
+        // still sound: neither is the whole instrument on its own.
+        check(neither > all - 24.0 && noPickup > all - 24.0
+                  && noTone < all - 0.5 && noTine < all - 0.1,
+              "the pickup and the direct paths each carry part of it", rb);
+    }
+
     // ---- tunings ---------------------------------------------------------
     // The scale reaches the audio thread, survives a session, and is a
     // different instrument from the equal divisions it replaces.
