@@ -60,7 +60,7 @@ struct VoiceParams {
     // Rhodes is heard *through* its pickup, and these paths only exist because
     // the Pd model's pickup was too weak to carry a fundamental on its own.
     // Kept as tone controls, not as part of the signal path.
-    float tineLevelLin = 0.5012f;
+    float tineLevelLin = 0.1778f;   // -15 dB
     float tineSendLin = 0.000141f;   // -77 dB
 
     // tone bar
@@ -127,7 +127,7 @@ struct VoiceParams {
     // raw sub-millisecond pulse through it is literally a click: it put a
     // 0.42 step at the start of every note against a sustained level of 0.34.
     float pickupAttackLin = 1.0e-5f; // -100 dB
-    float pickupLowpassHz = 2000.0f;
+    float pickupLowpassHz = 900.0f;
     // Pickup geometry, in units of the tine's vibration amplitude.  These
     // replace the old "symmetry" exponent: offset is what actually produces
     // asymmetry, and so it is now the Rhodes-to-Wurlitzer axis.  An offset of

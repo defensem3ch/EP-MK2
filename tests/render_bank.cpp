@@ -8,6 +8,7 @@
 //   ./epmk2-bank out/dir [--seconds 10] [--tail 0.5]
 #include <cstdio>
 #include <cstring>
+#include <utility>
 #include <vector>
 
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -26,10 +27,20 @@ int main(int argc, char** argv)
     const juce::File dir(juce::File::getCurrentWorkingDirectory()
                              .getChildFile(juce::String(argv[1])));
     double seconds = 10.0, tail = 0.5;
+    // --param <id> <value>, repeatable: renders a variant without rebuilding,
+    // so a hypothesis about one control can be measured against the instrument
+    // rather than argued about.
+    std::vector<std::pair<juce::String, float>> overrides;
     for (int i = 2; i < argc - 1; ++i) {
         if      (!strcmp(argv[i], "--seconds")) seconds = atof(argv[++i]);
         else if (!strcmp(argv[i], "--tail"))    tail    = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--param") && i + 2 < argc) {
+            overrides.push_back({ juce::String(argv[i + 1]), (float) atof(argv[i + 2]) });
+            i += 2;
+        }
     }
+    for (const auto& o : overrides)
+        printf("  %s = %.4f\n", o.first.toRawUTF8(), o.second);
     dir.createDirectory();
 
     // The library's own grid: every third semitone from E1 to E7, and the
@@ -52,6 +63,9 @@ int main(int argc, char** argv)
                 p->setValueNotifyingHost(0.0f);
             if (auto* p = proc.getState().getParameter("strike_var"))
                 p->setValueNotifyingHost(0.0f);
+            for (const auto& o : overrides)
+                if (auto* p = proc.getState().getParameter(o.first))
+                    p->setValueNotifyingHost(p->convertTo0to1(o.second));
 
             const int held = int(seconds * sr);
             const int total = held + int(tail * sr);

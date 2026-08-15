@@ -66,7 +66,7 @@ def measure(path, note):
 
     return dict(f0=f0, release=release, decay=d,
                 peak=float(np.abs(x).max()),
-                centroid=centroid(x, rate),
+                centroid=centroid(x, rate, above=f0 * 0.5),
                 inharmonic=inharmonic[0] if inharmonic else None,
                 sub=sub,
                 fundamental=fund)
@@ -81,11 +81,66 @@ def line(label, a, b, unit="", fmt="{:.1f}"):
             f"{delta:>+8.1f} {unit}")
 
 
+def velocity_report(meta, model, notes):
+    """How level and brightness move with velocity, on both sides.
+
+    This is what `Vel to Contact` claims to control -- a harder blow shortening
+    the hammer's contact, and so brightening the note as well as raising it --
+    and nothing had ever checked that claim against the instrument.
+    """
+    layers = sorted({m["velocity"] for m in meta})
+    print("How velocity moves level and brightness\n")
+    lo_gap, hi_gap, slope_gap = [], [], []
+
+    for note in notes:
+        rows = []
+        for v in layers:
+            ref = next((m for m in meta if m["note"] == note
+                        and m["velocity"] == v), None)
+            mod = model.get((note, v))
+            if ref is None or mod is None:
+                continue
+            xa, ra = load_mono(ref["path"])
+            xb, rb = load_mono(mod)
+            f0 = 440.0 * 2 ** ((note - 69) / 12.0)
+            rows.append((v,
+                         20 * math.log10(max(float(np.abs(xa).max()), 1e-9)),
+                         20 * math.log10(max(float(np.abs(xb).max()), 1e-9)),
+                         centroid(xa, ra, above=f0 * 0.5),
+                         centroid(xb, rb, above=f0 * 0.5)))
+        if len(rows) < 4:
+            continue
+
+        print(f"  note {note}")
+        print(f"    {'vel':>4} {'level: inst':>12} {'model':>8} | "
+              f"{'brightness: inst':>17} {'model':>8}")
+        for v, la, lb, ca, cb in rows:
+            print(f"    {v:>4} {la:>12.1f} {lb:>8.1f} | {ca:>17.0f} {cb:>8.0f}")
+
+        # Everything is relative to the loudest layer: absolute level is a
+        # trim, but how far the instrument travels from soft to hard is not.
+        la_span = rows[0][1] - rows[-1][1]
+        lb_span = rows[0][2] - rows[-1][2]
+        ca_span = rows[-1][3] / max(rows[0][3], 1.0)
+        cb_span = rows[-1][4] / max(rows[0][4], 1.0)
+        print(f"    soft-to-hard: level {la_span:+.1f} vs {lb_span:+.1f} dB,"
+              f"  brightness x{ca_span:.2f} vs x{cb_span:.2f}\n")
+        lo_gap.append(lb_span - la_span)
+        hi_gap.append(cb_span - ca_span)
+
+    if lo_gap:
+        print("Summary, model minus instrument")
+        print(f"  level range over velocity  {statistics.mean(lo_gap):+6.1f} dB")
+        print(f"  brightness growth          {statistics.mean(hi_gap):+6.2f} x")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="directory of model renders")
     ap.add_argument("--velocity", type=lambda v: int(v, 0), default=0x7F)
     ap.add_argument("--notes", type=int, nargs="*")
+    ap.add_argument("--velocity-response", action="store_true",
+                    help="compare across all velocity layers instead")
     args = ap.parse_args()
 
     meta = load_metadata()
@@ -99,6 +154,10 @@ def main():
     notes = sorted({m["note"] for m in meta} & {n for n, _ in model})
     if args.notes:
         notes = [n for n in notes if n in args.notes]
+
+    if args.velocity_response:
+        velocity_report(meta, model, notes)
+        return
 
     print(f"Reference instrument vs the model, velocity 0x{args.velocity:02X}")
     print(f"  {'':<26} {'instrument':>10} {'model':>10} {'difference':>10}\n")

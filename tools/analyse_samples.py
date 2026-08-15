@@ -271,11 +271,23 @@ def decay_q(x, rate, freq, skip=0.05, tail=0.03, until=None):
                 tau=float(-1.0 / slope), window=float((b - a) / rate))
 
 
-def centroid(x, rate):
+def centroid(x, rate, above=0.0):
+    """Spectral centroid, optionally ignoring everything below `above` Hz.
+
+    The cutoff matters when comparing two recordings of different loudness.
+    A quiet sample's centroid is dragged down by whatever noise and rumble sits
+    under the note -- the reference library's top octave measured a centroid
+    *below its own fundamental*, which is a statement about its noise floor and
+    not about its tone.  Passing f0/2 compares the notes instead.
+    """
     n = 1 << 15
     seg = x[: min(len(x), n)]
     spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg)), n))
     freqs = np.fft.rfftfreq(n, 1.0 / rate)
+    if above > 0.0:
+        keep = freqs >= above
+        spec = spec[keep]
+        freqs = freqs[keep]
     total = spec.sum()
     return float((freqs * spec).sum() / total) if total > 0 else 0.0
 

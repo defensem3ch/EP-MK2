@@ -76,7 +76,7 @@ inline const std::vector<Spec>& table()
           "How much one strike differs from the next in force, contact time and timing. At 0 every note is identical; raise it and repeated notes stop sounding sequenced." },
 
         // --- tine: what actually vibrates -----------------------------------
-        { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,   -6.0f, false,
+        { "tine_level",      "Tine Level",      "Tine", Unit::Decibels, -100.0f,     0.0f,  -15.0f, false,
           "How much of the tine's own vibration goes straight to the output, bypassing the pickup." },
         { "tine_send",       "Tine to Pickup",  "Tine", Unit::Decibels, -100.0f,    24.0f,  -77.0f, false,
           "How much of the tine reaches the pickup. The pickup faces the tine, so this is the more physical of its two paths to the output." },
@@ -130,7 +130,7 @@ inline const std::vector<Spec>& table()
           "How far the tine rests from the pole piece. Near gives a sharp, spiky response; far is gentler and more linear." },
         { "pickup_offset",   "Pickup Offset",   "Pickup", Unit::Ratio,      0.0f,     1.5f,    0.8f, false,
           "How far the tine sits off the pickup's magnetic axis, and the strongest Rhodes-to-Wurlitzer control here. At 0 the response is purely even and the fundamental collapses under its own octave; low values bark, high values are clean and fundamental-heavy." },
-        { "pickup_lopass",   "Coil Low-Pass",   "Pickup", Unit::Hertz,     20.0f, 20000.0f, 2000.0f, true,
+        { "pickup_lopass",   "Coil Low-Pass",   "Pickup", Unit::Hertz,     20.0f, 20000.0f,  900.0f, true,
           "The coil's own inductance rolling off the top. With the pickup's rate-of-change response it makes a broad band-pass." },
         { "buzz_level",      "Buzz Level",      "Pickup", Unit::Decibels, -100.0f,     0.0f,    0.0f, false,
           "A fourth-power term added to the pickup output, putting a hard edge on the loud half of the waveform." },
