@@ -205,11 +205,16 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
         // pastel grouping does some work rather than only labelling a header.
         slider.setColour(juce::Slider::rotarySliderFillColourId,
                          sectionColour(spec.section).withMultipliedSaturation(1.15f));
-        // A control that runs either side of zero draws its arc from the
-        // centre out, so the knob shows which way it has gone and by how
-        // much.  Drawn from the left stop, a bipolar control at rest looks
-        // half on.
-        if (spec.min < 0.0f && spec.max > 0.0f)
+        // A control whose range is *symmetric* about zero draws its arc from
+        // the centre out, so the knob shows which way it has gone and by how
+        // much.  Drawn from the left stop, a control that rests in the middle
+        // looks half on.
+        //
+        // Symmetric, not merely crossing zero: a dB control with headroom
+        // runs -100 to +12, which crosses zero and is not bipolar -- its rest
+        // is unity at the top of the travel, not the middle.  Reading it as
+        // bipolar put a centre detent on Master and drew its arc backwards.
+        if (spec.min < 0.0f && spec.min == -spec.max)
             slider.getProperties().set("bipolar", true);
 
         // Frequencies and Q span decades; a linear knob spends nearly all of
