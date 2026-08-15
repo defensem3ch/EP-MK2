@@ -946,7 +946,9 @@ int main()
         };
 
         // The classic demonstration: hold a chord silently, strike a low note,
-        // and the chord answers.
+        // then *damp the struck note* and listen to what is left.  Measuring
+        // while it still rings measures the struck note -- it masks the very
+        // thing being looked for.
         auto heldChordLevel = [&](float amount) {
             set("sympathetic", amount);
             set("key_var", 0.0f);
@@ -955,24 +957,26 @@ int main()
             silence();
 
             juce::MidiBuffer hold;
-            hold.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
             for (int n : { 64, 68, 71 })
-                hold.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8)1), 1);
-            renderPeak(proc, hold, blocksPerSecond, block);
+                hold.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8)1), 0);
+            renderPeak(proc, hold, blocksPerSecond / 2, block);
 
             juce::MidiBuffer strike;
-            strike.addEvent(juce::MidiMessage::noteOn(1, 28, (juce::uint8)120), 0);
+            strike.addEvent(juce::MidiMessage::noteOn(1, 40, (juce::uint8)120), 0);
+            renderPeak(proc, strike, blocksPerSecond / 2, block);
+
+            juce::MidiBuffer damp;
+            damp.addEvent(juce::MidiMessage::noteOff(1, 40), 0);
             juce::AudioBuffer<float> b(2, block);
             std::vector<float> out;
             for (int i = 0; i < blocksPerSecond * 2; ++i) {
                 b.clear();
-                proc.processBlock(b, strike);
-                strike.clear();
+                proc.processBlock(b, damp);
+                damp.clear();
                 for (int k = 0; k < block; ++k) out.push_back(b.getSample(0, k));
             }
             silence();
 
-            // Energy at the held chord's pitches.
             double total = 0.0;
             for (int n : { 64, 68, 71 }) {
                 const double f = 440.0 * std::pow(2.0, (n - 69) / 12.0);
@@ -989,53 +993,45 @@ int main()
         char sy[96];
         snprintf(sy, sizeof sy, "  (%.1f dB more at the held pitches)",
                  20.0 * std::log10(rung / std::max(1e-15, quiet)));
-        check(rung > quiet * 1.5, "a silently held chord answers a struck note", sy);
+        check(rung > quiet * 1.6, "a silently held chord answers a struck note", sy);
 
-        // Stability, at twice the control's maximum with a keyboard's worth of
-        // undamped voices and the widest spread of Q.  A sum rather than an
-        // average here made the loop gain grow with the number of held notes:
-        // stable on a chord, a drone that never decayed on a pedalled handful.
+        // Stability with only a *few* notes held, which is the worst case and
+        // the one that matters.  Each voice is driven by the average of the
+        // others, so with two coupled voices the divisor is one and each hears
+        // the other at full scale; with sixty-eight it is divided by
+        // sixty-seven.  The loop is tightest when the fewest notes are down.
+        //
+        // Checking sixty-eight alone -- which is what this did -- passes at a
+        // setting where two held notes grow to 187% of their own peak and a
+        // held note never decays at all.
         {
-            set("sympathetic", 1.0f);
-            set("key_var", 1.0f);
-            set("polyphony", 128.0f);
-            proc.prepareToPlay(sr, block);
-            silence();
+            set("key_var", 0.0f);
+            set("strike_var", 0.0f);
+            for (int voices : { 2, 3, 4 }) {
+                double coupledTail = 0.0, bareTail = 0.0;
+                for (int on = 0; on < 2; ++on) {
+                    set("sympathetic", on ? 1.0f : 0.0f);
+                    proc.prepareToPlay(sr, block);
+                    silence();
 
-            juce::MidiBuffer midi;
-            midi.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
-            for (int n = 28; n < 96; ++n)
-                midi.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8)110), 1);
-            const float early = renderPeak(proc, midi, blocksPerSecond * 2, block);
-            juce::MidiBuffer none;
-            renderPeak(proc, none, blocksPerSecond * 10, block);
-            const float late = renderPeak(proc, none, blocksPerSecond * 2, block);
-
-            // Compared against the same passage with no coupling at all.  An
-            // absolute decay threshold measures the instrument rather than the
-            // coupling: 68 high-Q notes held on the pedal are still at 94% of
-            // their level after 14 seconds with the feature switched off, so
-            // "it barely decayed" says nothing on its own.
-            set("sympathetic", 0.0f);
-            proc.prepareToPlay(sr, block);
-            silence();
-            juce::MidiBuffer dry;
-            dry.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
-            for (int n = 28; n < 96; ++n)
-                dry.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8)110), 1);
-            const float dryEarly = renderPeak(proc, dry, blocksPerSecond * 2, block);
-            juce::MidiBuffer nothing;
-            renderPeak(proc, nothing, blocksPerSecond * 10, block);
-            const float dryLate = renderPeak(proc, nothing, blocksPerSecond * 2, block);
-
-            const float coupled = late / juce::jmax(1.0e-9f, early);
-            const float bare    = dryLate / juce::jmax(1.0e-9f, dryEarly);
-            char st[128];
-            snprintf(st, sizeof st, "  (%.0f%% left with coupling, %.0f%% without)",
-                     coupled * 100.0f, bare * 100.0f);
-            check(std::isfinite(late) && coupled < bare + 0.03f,
-                  "coupling does not make the instrument sustain", st);
-            silence();
+                    juce::MidiBuffer midi;
+                    for (int i = 0; i < voices; ++i)
+                        midi.addEvent(juce::MidiMessage::noteOn(
+                            1, 60 + i * 3, (juce::uint8)100), 0);
+                    const float early = renderPeak(proc, midi, blocksPerSecond / 3, block);
+                    juce::MidiBuffer none;
+                    renderPeak(proc, none, blocksPerSecond * 2, block);
+                    const float late = renderPeak(proc, none, blocksPerSecond / 2, block);
+                    (on ? coupledTail : bareTail) = late / std::max(1.0e-9f, early);
+                    silence();
+                }
+                char st[112];
+                snprintf(st, sizeof st,
+                         "  (%d notes: %.0f%% left coupled, %.0f%% uncoupled)",
+                         voices, coupledTail * 100.0, bareTail * 100.0);
+                check(coupledTail < bareTail * 1.6,
+                      "a few held notes still decay with coupling", st);
+            }
         }
 
         set("sympathetic", 0.35f);

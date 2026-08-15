@@ -506,6 +506,36 @@ That bug was reachable by anything that could put a NaN in the audio path, and
 would have taken the host down rather than making a bad sound. It had nothing
 to do with sympathetic resonance beyond being found by it.
 
+#### The scale was ten times too high, and the test could not see it
+
+Each voice is driven by the **average of the others**, which was meant to make
+the control mean the same thing whether two notes are held or seventy. It does
+the opposite for stability: with two coupled voices the divisor is one, so each
+hears the other at full scale, while with sixty-eight it is divided by
+sixty-seven. **The loop is tightest when the fewest notes are down.**
+
+The stability check exercised sixty-eight voices. It passed at a setting where
+two held notes grew to **187% of their own peak**, and a note held through a
+short phrase never decayed at all -- which is how this was actually found, from
+a MIDI file where a held F stopped fading.
+
+| held notes | level after 3 s, coupling at maximum | uncoupled |
+| --- | --- | --- |
+| 2 | 187% | 22% |
+| 3 | 160% | 25% |
+| 4 | 104% | 22% |
+| 16 | 42% | 20% |
+
+`kCouplingScale` is now **0.05**, set by the two-note case, and the checks
+cover two, three and four held notes against the same passage uncoupled.
+
+That also means the effect is smaller than previously claimed. The 24.6 dB
+reported earlier was measured on four voices -- squarely inside the
+regenerative regime -- and was mostly feedback rather than sympathy. Honestly
+measured, with the struck note damped: **+8 dB at maximum**, +3.7 dB at the
+0.35 default. Which is about right for tines coupled through a frame rather
+than strings over a soundboard.
+
 #### Cost
 
 Coupling keeps undamped voices alive, so a pedalled passage accumulates voices

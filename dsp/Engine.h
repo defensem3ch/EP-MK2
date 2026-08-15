@@ -47,10 +47,14 @@ class Engine {
 public:
     static constexpr int kMaxVoices = 128;
 
-    // Divides the sympathetic control down to something a bank of Q-3000
-    // resonators can be fed without howling.  Set by measurement: see the
-    // stability check in tests/.
-    static constexpr float kCouplingScale = 0.5f;
+    // Set by the *two note* case, which is the worst one and was very nearly
+    // missed: the drive each voice receives is the average of the others, so
+    // with two coupled voices the divisor is one and each hears the other at
+    // full scale.  With sixty-eight it is divided by sixty-seven.  The loop is
+    // therefore tightest when the fewest notes are held -- the opposite of
+    // what the first stability check assumed, which is why it passed at a
+    // setting where two held notes grew to 187% of their own peak.
+    static constexpr float kCouplingScale = 0.05f;
 
     void setVoiceCount(int n) noexcept
     {
