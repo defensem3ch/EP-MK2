@@ -149,7 +149,7 @@ public:
     // and narrow, which is the wrong shape for a screen.
     // Set by the type, not chosen: three columns of four controls at the
     // width the longest name needs on one line.  See kControlWidth.
-    static constexpr int kDesignWidth  = 1988;
+    static constexpr int kDesignWidth  = 1604;
     // Height comes from the panel's contents; see PanelContent::designHeight.
     int designHeight = 0;
 

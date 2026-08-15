@@ -1403,10 +1403,12 @@ int main()
                 int worstOver = 0;
                 juce::String worstName;
                 for (const auto& sp : epmk2::params::table()) {
-                    const int need = required(sp.name);
+                    // The panel's name for it, which is what gets drawn and
+                    // what the panel's width is derived from.
+                    const int need = required(sp.panelName());
                     if (need > widestControl - 4) {
                         const int over = need - (widestControl - 4);
-                        if (over > worstOver) { worstOver = over; worstName = sp.name; }
+                        if (over > worstOver) { worstOver = over; worstName = sp.panelName(); }
                     }
                 }
                 char lb[128];

@@ -29,11 +29,16 @@ constexpr int kCellPad       = 6;
 constexpr int kInnerColumns  = 4;
 
 // A control is as wide as the longest name it may have to show on one line --
-// "Hammer to Pickup" at kLabelFont, measured -- plus its own padding.  One
-// line of name is what lets the name sit against its knob with no ragged line
-// starts along a row, and it is why raising kLabelFont widens the whole panel.
-// The test below is what keeps this number honest.
-constexpr int kNameWidth     = 141;
+// "Hammer Level" at kLabelFont, measured -- plus its own padding.  One line of
+// name is what lets the name sit against its knob with no ragged line starts
+// along a row, and it is why raising kLabelFont widens the whole panel.  The
+// test below is what keeps this number honest.
+//
+// It is the *panel* name that counts, not the parameter's: the panel is as
+// wide as its longest one, so a name that only needs to be long for the
+// host's automation list is not allowed to charge all 45 controls for it.
+// See Spec::panelName.
+constexpr int kNameWidth     = 109;
 constexpr int kControlWidth  = kNameWidth + 2 * kCellPad;
 
 // What a control's height is made of.  The knob is drawn into the square that
@@ -43,7 +48,8 @@ constexpr int kControlWidth  = kNameWidth + 2 * kCellPad;
 constexpr int kLabelArea     = 21;   // one line of name, all any of them needs
 constexpr int kKnobTop       = 5;    // so the knob is not against its name
 constexpr int kKnobArea      = 58;   // the square the knob is drawn into
-constexpr int kValueBox      = 27;   // the slider's own text box
+constexpr int kValueBox      = 27;   // the slider's own text box, its height
+constexpr int kValueWidth    = kControlWidth - 2 * kCellPad;
 constexpr int kControlHeight = kCellPad + kLabelArea + kKnobTop
                              + kKnobArea + kValueBox + kCellPad;
 
@@ -148,9 +154,9 @@ static_assert(EpMk2Editor::kDesignWidth
 
 //==============================================================================
 ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec& spec)
-    : label(spec.name), help(spec.help), isToggle(spec.unit == Unit::Toggle)
+    : label(spec.panelName()), help(spec.help), isToggle(spec.unit == Unit::Toggle)
 {
-    setName(spec.name);
+    setName(spec.panelName());
     if (isToggle) {
         button.setColour(juce::ToggleButton::tickColourId,
                          sectionColour(spec.section).withMultipliedSaturation(1.15f));
@@ -160,7 +166,7 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
             juce::AudioProcessorValueTreeState::ButtonAttachment>(tree, spec.id, button);
     } else {
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 110, kValueBox);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, kValueWidth, kValueBox);
         // No suffix or decimal count here: the parameter's own
         // stringFromValue supplies both, and setting them again doubles the
         // unit ("0.0 dB dB").
