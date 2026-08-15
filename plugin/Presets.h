@@ -203,7 +203,17 @@ inline const std::vector<Preset>& table()
             { "tine_ratio2",      8.41f },
             { "tine_ratio3",      4.88f },
             { "tine_decay",     133.27f },
-            { "tine_level",       0.0f },
+            // Two dB down, for headroom: at 0 this peaked -1.7 dB at the
+            // bottom of the keyboard where nothing else here goes above
+            // -3.2, and a preset with nothing left in its lowest octave has
+            // nowhere to go when someone leans on it.
+            //
+            // Here rather than on Pickup Level, which does nothing at all in
+            // this preset: both sends are nearly shut, so the pickup carries
+            // almost none of this sound and turning it down changes the
+            // output by exactly zero.  The direct tine *is* the instrument
+            // here.
+            { "tine_level",      -2.0f },
             { "tine_send",      -84.95f },
             { "tone_level",      -6.0f },
             { "tone_send",      -50.35f },
