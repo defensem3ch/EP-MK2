@@ -11,9 +11,10 @@ Model rendered on the same grid with variation off.
 ## Where it stands
 
 ```
-decay        +0.4 dB of Q, spread 3.5   (18 notes measurable)
-brightness    -1 Hz,       spread 231
-tine level   +0.6 dB,      spread 4.6
+decay        +0.5 dB of Q, spread 3.6   (18 notes measurable)
+brightness   +41 Hz,       spread 142
+tine level   +0.3 dB,      spread 4.7
+harmonics    -0.1 dB,      spread 16.7
 ```
 
 Two defaults changed to get there, both from the measurement rather than by
@@ -55,6 +56,46 @@ A 900 Hz corner is low for a pickup coil alone, and it should be read as the
 whole chain the reference was captured through — coil, cable, the instrument's
 own passive tone control, and whatever Kontakt's sampling added — rather than
 as a claim about the inductance.
+
+### The harmonic tilt was the same fault, seen from another side
+
+`Bass Tilt` 0.5 → **1.0**, the bare 1/omega law.
+
+It had been set to 0.5 because the full law appeared to overshoot -- but that
+was measured while the coil sat an octave and a half too high, which was
+colouring the keyboard on its own. With the coil corrected, the full law is
+right:
+
+| | tilt 0.5 | tilt 1.0 |
+| --- | --- | --- |
+| harmonic content | +6.7 dB | **−0.1 dB** |
+| brightness, spread | 231 Hz | **142 Hz** |
+
+The mechanism: a real Rhodes' treble tines have small excursion, so the pickup
+works in its linear region and the note is nearly a sine. Ours drove the pickup
+equally hard at every pitch, so the top of the keyboard kept generating
+harmonics the instrument does not have -- at note 88 the reference's second
+harmonic is 47 dB down and the model's was 15.
+
+### Attack
+
+The model reaches its peak about 3 ms sooner than the instrument at the notes
+where both can be measured cleanly. Across all 25 the figure is unusable --
+some reference notes peak very late and swamp the average -- so this is worth
+returning to with a better estimator rather than acted on now.
+
+### What it cost: the coupling needed recalibrating
+
+Matching the instrument left the model with fewer harmonics, so the
+sympathetic bus carries less energy at the frequencies a held chord responds
+to, and the effect nearly vanished at the old setting. `kCouplingScale` 0.25 →
+**0.5** restores it: 24.6 dB, against 3.2 at the old value.
+
+The stability check had to be rewritten too. It compared the decay to an
+absolute threshold, which measures the *instrument* and not the coupling: with
+the feature switched off entirely, 68 high-Q notes held on the pedal are still
+at 94% of their level after 14 seconds. It now compares against that same
+passage with coupling off, which is the only number that says anything.
 
 ## Still open: velocity
 

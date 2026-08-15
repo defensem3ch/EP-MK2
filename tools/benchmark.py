@@ -72,6 +72,44 @@ def measure(path, note):
                 fundamental=fund)
 
 
+def harmonics(x, rate, f0, count=6):
+    """Level of each whole multiple of f0, relative to the fundamental.
+
+    The library's spectrum is overwhelmingly harmonic, and the model's
+    harmonics come almost entirely from the pickup's nonlinearity -- so this
+    is the most direct check of whether that nonlinearity is doing the right
+    amount of work.
+    """
+    def at(f):
+        w = 2.0 * math.pi * f / rate
+        c = 2.0 * math.cos(w)
+        s0 = s1 = s2 = 0.0
+        for v in x:
+            s0 = v + c * s1 - s2
+            s2, s1 = s1, s0
+        return math.sqrt(max(0.0, s1*s1 + s2*s2 - c*s1*s2)) / max(1, len(x))
+
+    base = at(f0)
+    if base <= 0:
+        return []
+    return [20 * math.log10(max(at(f0 * n), 1e-12) / base) for n in range(2, count + 1)]
+
+
+def attack_time(x, rate, release):
+    """How long the note takes to reach its peak, in milliseconds.
+
+    Contact time and the resonators' build-up both land here, and nothing has
+    ever compared it -- the spectral measurements say what a note contains,
+    not how it arrives.
+    """
+    held = x[: int(min(release, 0.5) * rate)]
+    if len(held) == 0:
+        return None
+    env = np.abs(held)
+    peak = int(np.argmax(env))
+    return 1000.0 * peak / rate
+
+
 def line(label, a, b, unit="", fmt="{:.1f}"):
     """One row: the instrument, the model, and the gap between them."""
     if a is None or b is None:
@@ -162,7 +200,7 @@ def main():
     print(f"Reference instrument vs the model, velocity 0x{args.velocity:02X}")
     print(f"  {'':<26} {'instrument':>10} {'model':>10} {'difference':>10}\n")
 
-    gaps = dict(decay=[], centroid=[], tine=[], sub=[])
+    gaps = dict(decay=[], centroid=[], tine=[], sub=[], harm=[], attack=[])
     for note in notes:
         ref = next((m for m in meta if m["note"] == note
                     and m["velocity"] == args.velocity), None)
@@ -193,6 +231,25 @@ def main():
                        b["inharmonic"]["level_db"]))
             gaps["tine"].append(b["inharmonic"]["level_db"]
                                 - a["inharmonic"]["level_db"])
+        # Harmonic structure: where the pickup's nonlinearity shows up.
+        xa, ra = load_mono(ref["path"])
+        xb, rb = load_mono(mod)
+        rel_a = find_release(xa, ra)
+        rel_b = find_release(xb, rb)
+        ha = harmonics(xa[: int(rel_a * ra)], ra, a["f0"])
+        hb = harmonics(xb[: int(rel_b * rb)], rb, b["f0"])
+        if ha and hb:
+            print(f"  {'harmonics 2..6 (dB)':<26} "
+                  + " ".join(f"{v:>5.0f}" for v in ha)
+                  + " |" + " ".join(f"{v:>5.0f}" for v in hb))
+            gaps["harm"].append(statistics.mean(hb) - statistics.mean(ha))
+
+        ta = attack_time(xa, ra, rel_a)
+        tb = attack_time(xb, rb, rel_b)
+        if ta is not None and tb is not None:
+            print(line("attack (ms)", ta, tb, fmt="{:.1f}"))
+            gaps["attack"].append(tb - ta)
+
         if a["sub"] and b["sub"]:
             print(line("sub-fundamental (x f0)", a["sub"]["ratio"],
                        b["sub"]["ratio"], fmt="{:.2f}"))
@@ -212,6 +269,12 @@ def main():
               f"spread {statistics.pstdev(gaps['tine']):.1f}")
     if gaps["sub"]:
         print(f"  sub ratio  {statistics.mean(gaps['sub']):+6.2f} x f0")
+    if gaps["harm"]:
+        print(f"  harmonics  {statistics.mean(gaps['harm']):+6.1f} dB, "
+              f"spread {statistics.pstdev(gaps['harm']):.1f}")
+    if gaps["attack"]:
+        print(f"  attack     {statistics.mean(gaps['attack']):+6.1f} ms, "
+              f"spread {statistics.pstdev(gaps['attack']):.1f}")
 
 
 if __name__ == "__main__":

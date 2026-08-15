@@ -112,11 +112,14 @@ struct VoiceParams {
     // octave, tilts the whole keyboard against the bass: MK2 measured 9.3 dB
     // down at note 21 against MK1 and level at note 81.
     //
-    // 1.0 is the bare 1/omega law and overshoots badly -- the bass ends up
-    // 25 dB above the treble -- because a bass tine is also far more massive,
-    // which offsets part of it.  0.5 lands note 21 at -13.5 dB against MK1's
-    // -14.7, and is the default.  0 removes the compensation entirely.
-    float tineMassTracking = 0.5f;
+    // 1.0, the bare 1/omega law, and it is right.  It was set to 0.5 earlier
+    // because the full law appeared to overshoot -- but that was measured
+    // while the coil's low-pass sat an octave and a half too high, which was
+    // colouring the keyboard on its own.  With the coil corrected, benchmarked
+    // against the reference instrument across 25 pitches, the full law puts
+    // the harmonic content within 0.1 dB and cuts the spread of the brightness
+    // error from 231 Hz to 142.  0 removes the compensation entirely.
+    float tineMassTracking = 1.0f;
 
     // pickup
     float pickupGainLin = 5.6234f;   // +15 dB

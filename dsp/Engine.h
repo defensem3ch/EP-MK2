@@ -50,7 +50,7 @@ public:
     // Divides the sympathetic control down to something a bank of Q-3000
     // resonators can be fed without howling.  Set by measurement: see the
     // stability check in tests/.
-    static constexpr float kCouplingScale = 0.25f;
+    static constexpr float kCouplingScale = 0.5f;
 
     void setVoiceCount(int n) noexcept
     {
@@ -65,6 +65,10 @@ public:
     }
 
     int getVoiceCount() const noexcept { return voiceCount; }
+
+    // Only for calibrating the coupling against a measurement; the shipped
+    // value is kCouplingScale.
+    void setCouplingScaleForTest(float s) noexcept { couplingScale = s; }
 
     void prepare(double sr, int numVoices) noexcept
     {
@@ -162,7 +166,7 @@ public:
         // handful of notes turned the instrument into a self-sustaining drone
         // that never decayed, then diverged outright.  Averaging makes the
         // control mean the same thing whether two notes are held or seventy.
-        const float couple = p.voice.sympathetic * kCouplingScale
+        const float couple = p.voice.sympathetic * couplingScale
                            / (float) juce_max(1, coupledLast - 1);
         const bool coupling = p.voice.sympathetic > 0.0f;
 
@@ -336,6 +340,7 @@ private:
     PickupShaper shaper;
 
     float tremoloPhase = 0.0f;
+    float couplingScale = kCouplingScale;
     float couplingBus = 0.0f;
     int coupledLast = 0;
     std::array<float, kMaxVoices> voiceLast {};

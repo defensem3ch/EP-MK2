@@ -69,7 +69,7 @@ inline const std::vector<Spec>& table()
         // How much further a bass tine swings than a treble one for the same
         // blow.  The pickup differentiates, which is a real +6 dB/octave, and
         // without this the whole keyboard tilts against the bass.
-        { "bass_tilt",       "Bass Tilt",       "Hammer", Unit::Ratio,      0.0f,     1.5f,    0.5f, false,
+        { "bass_tilt",       "Bass Tilt",       "Hammer", Unit::Ratio,      0.0f,     1.5f,    1.0f, false,
           "How much further a bass tine swings than a treble one for the same blow. The pickup senses rate of change, which favours the treble by 6 dB per octave; this opposes it. Raise it for more bass." },
         // How much one strike differs from the next.  0 is exactly repeatable.
         { "strike_var",      "Strike Variation", "Hammer", Unit::Ratio,     0.0f,     1.0f,    0.3f, false,

@@ -1011,11 +1011,30 @@ int main()
             renderPeak(proc, none, blocksPerSecond * 10, block);
             const float late = renderPeak(proc, none, blocksPerSecond * 2, block);
 
-            char st[96];
-            snprintf(st, sizeof st, "  (%.4f -> %.4f over 14 s, %d voices)",
-                     early, late, proc.getActiveVoiceCount());
-            check(std::isfinite(late) && late < early * 0.95,
-                  "coupling stays stable with a keyboard held down", st);
+            // Compared against the same passage with no coupling at all.  An
+            // absolute decay threshold measures the instrument rather than the
+            // coupling: 68 high-Q notes held on the pedal are still at 94% of
+            // their level after 14 seconds with the feature switched off, so
+            // "it barely decayed" says nothing on its own.
+            set("sympathetic", 0.0f);
+            proc.prepareToPlay(sr, block);
+            silence();
+            juce::MidiBuffer dry;
+            dry.addEvent(juce::MidiMessage::controllerEvent(1, 64, 127), 0);
+            for (int n = 28; n < 96; ++n)
+                dry.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8)110), 1);
+            const float dryEarly = renderPeak(proc, dry, blocksPerSecond * 2, block);
+            juce::MidiBuffer nothing;
+            renderPeak(proc, nothing, blocksPerSecond * 10, block);
+            const float dryLate = renderPeak(proc, nothing, blocksPerSecond * 2, block);
+
+            const float coupled = late / juce::jmax(1.0e-9f, early);
+            const float bare    = dryLate / juce::jmax(1.0e-9f, dryEarly);
+            char st[128];
+            snprintf(st, sizeof st, "  (%.0f%% left with coupling, %.0f%% without)",
+                     coupled * 100.0f, bare * 100.0f);
+            check(std::isfinite(late) && coupled < bare + 0.03f,
+                  "coupling does not make the instrument sustain", st);
             silence();
         }
 
