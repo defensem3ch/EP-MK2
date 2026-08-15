@@ -75,6 +75,10 @@ struct PanelLookAndFeel : juce::LookAndFeel_V4
 {
     juce::Font getLabelFont(juce::Label&) override;
 
+    // Catches the fonts this file never names: JUCE turns a slider's value box
+    // into a TextEditor when it is typed into, and that picks its own font.
+    juce::Typeface::Ptr getTypefaceForFont(const juce::Font&) override;
+
     // A solid knob with the travelled range drawn as an arc around it, in the
     // colour of the section it belongs to.  JUCE's default rotary puts a dot
     // where the pointer is, which reads as a second object rather than as part

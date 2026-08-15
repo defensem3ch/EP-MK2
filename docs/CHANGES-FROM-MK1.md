@@ -145,6 +145,11 @@ by panning between two amplifiers. Everything downstream of that is per channel.
 
 * 44 controls, grouped by physical part and ordered **level, then tone, then
   time** within each group, in signal-flow order with tuning last.
+* **The typeface is embedded**, so the panel looks the same on every machine.
+  Both MK1 and the port asked the host for "sans-serif" and got a different
+  font on each OS -- which also meant the label widths the layout is built
+  around were not knowable at build time. Liberation Sans, under the SIL Open
+  Font License 1.1, bundled unmodified with its licence.
 * **An info bar**: every control carries a line of what it is and a line of
   what it does to the sound, shown on hover.
 * The panel scales with the window, remembers its size per user *and* per

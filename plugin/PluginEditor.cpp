@@ -1,5 +1,7 @@
 #include <limits>
 
+#include <EpMk2Fonts.h>
+
 #include "PluginEditor.h"
 #include "PluginProcessor.h"
 
@@ -10,6 +12,39 @@ constexpr int kControlWidth  = 100;
 constexpr int kControlHeight = 124;
 constexpr int kSectionHeader = 30;
 constexpr int kHeaderHeight  = 56;
+
+// The panel's typeface, embedded in the binary rather than asked of the host.
+//
+// JUCE's default is whatever the machine calls "sans-serif": Noto Sans on this
+// box, Segoe UI on Windows, Helvetica on macOS.  That makes the panel look
+// different everywhere, and worse, it makes label widths unknowable at build
+// time -- the layout sizes its cells to the longest word, so a wider font on
+// someone else's machine silently overflows what the tests measured here.
+//
+// Liberation Sans, under the SIL Open Font License 1.1, which permits
+// embedding and redistribution.  Bundled unmodified; the licence ships in
+// resources/fonts/.
+//
+// The two weights are separate files rather than one synthesised from the
+// other: JUCE fakes bold by smearing the outline, which at 15 px on a dark
+// background fills in the counters of a, e and s.
+inline juce::Typeface::Ptr panelTypeface(bool bold)
+{
+    static const juce::Typeface::Ptr regular = juce::Typeface::createSystemTypefaceFor(
+        EpMk2Fonts::LiberationSansRegular_ttf, EpMk2Fonts::LiberationSansRegular_ttfSize);
+    static const juce::Typeface::Ptr heavy = juce::Typeface::createSystemTypefaceFor(
+        EpMk2Fonts::LiberationSansBold_ttf, EpMk2Fonts::LiberationSansBold_ttfSize);
+    return bold ? heavy : regular;
+}
+
+// Style is resolved here, into a real weight, and the options are then plain:
+// asking for bold *as well* as handing over the bold face is what produces
+// double-emboldened text.
+inline juce::FontOptions panelFont(float height, int style = juce::Font::bold)
+{
+    return juce::FontOptions(height, juce::Font::plain)
+        .withTypeface(panelTypeface((style & juce::Font::bold) != 0));
+}
 
 // Type sizes, in one place.  Everything is bold: at panel scale a regular
 // weight on a dark background is hard to read at a glance while playing.
@@ -137,7 +172,7 @@ void ParamControl::paint(juce::Graphics& g)
     g.fillRoundedRectangle(cell, 4.0f);
 
     g.setColour(juce::Colour(0xffe4e4e4));
-    g.setFont(juce::FontOptions(kLabelFont, juce::Font::bold));
+    g.setFont(panelFont(kLabelFont));
     // The name area is a fixed two lines so that every knob comes out the same
     // size -- sizing it to the text made controls with long names smaller than
     // their neighbours.  The text is aligned to the *top* of that area, so
@@ -220,7 +255,7 @@ void ParamSection::paint(juce::Graphics& g)
     g.fillRect(header.withTrimmedTop(header.getHeight() * 0.5f));
 
     g.setColour(juce::Colour(0xff262626));
-    g.setFont(juce::FontOptions(kSectionFont, juce::Font::bold));
+    g.setFont(panelFont(kSectionFont));
     g.drawText(title.toUpperCase(), header.reduced(8.0f, 0.0f),
                juce::Justification::centredLeft);
 }
@@ -242,7 +277,12 @@ void ParamSection::resized()
 //==============================================================================
 juce::Font PanelLookAndFeel::getLabelFont(juce::Label&)
 {
-    return juce::Font(juce::FontOptions(kValueFont, juce::Font::bold));
+    return juce::Font(panelFont(kValueFont));
+}
+
+juce::Typeface::Ptr PanelLookAndFeel::getTypefaceForFont(const juce::Font& f)
+{
+    return panelTypeface(f.isBold());
 }
 
 void PanelLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y,
@@ -386,22 +426,22 @@ void PanelContent::paint(juce::Graphics& g)
 
     auto titleArea = header.reduced(16, 0);
     g.setColour(juce::Colours::white);
-    g.setFont(juce::FontOptions(kTitleFont, juce::Font::bold));
+    g.setFont(panelFont(kTitleFont));
     const int titleWidth = juce::GlyphArrangement::getStringWidthInt(
-        juce::Font(juce::FontOptions(kTitleFont, juce::Font::bold)), "EP-MK2");
+        juce::Font(panelFont(kTitleFont)), "EP-MK2");
     g.drawText("EP-MK2", titleArea, juce::Justification::centredLeft);
 
     // The model is not the one Miguel Moreno wrote, but it descends from it,
     // and GPL-3 lineage should be visible in the thing itself rather than only
     // in a licence file nobody opens.
     g.setColour(juce::Colour(0xff9a9a9a));
-    g.setFont(juce::FontOptions(kCreditFont, juce::Font::bold));
+    g.setFont(panelFont(kCreditFont));
     g.drawText("after EP-MK1 by Miguel Moreno",
                titleArea.withTrimmedLeft(titleWidth + 14),
                juce::Justification::centredLeft);
 
     g.setColour(juce::Colour(0xffb4b4b4));
-    g.setFont(juce::FontOptions(kLabelFont, juce::Font::bold));
+    g.setFont(panelFont(kLabelFont));
     g.drawText(juce::String(activeVoices) + (activeVoices == 1 ? " voice" : " voices"),
                header.reduced(16, 0), juce::Justification::centredRight);
 
@@ -415,20 +455,20 @@ void PanelContent::paint(juce::Graphics& g)
 
     if (helpName.isEmpty()) {
         g.setColour(juce::Colour(0xff707070));
-        g.setFont(juce::FontOptions(kInfoFont));
+        g.setFont(panelFont(kInfoFont, juce::Font::plain));
         g.drawText("Hover a control to see what it does.", bar,
                    juce::Justification::centredLeft);
         return;
     }
 
     g.setColour(juce::Colours::white);
-    g.setFont(juce::FontOptions(kInfoFont, juce::Font::bold));
+    g.setFont(panelFont(kInfoFont));
     const int nameWidth = juce::GlyphArrangement::getStringWidthInt(
-        juce::Font(juce::FontOptions(kInfoFont, juce::Font::bold)), helpName + "  ");
+        juce::Font(panelFont(kInfoFont)), helpName + "  ");
     g.drawText(helpName, bar.withWidth(nameWidth), juce::Justification::centredLeft);
 
     g.setColour(juce::Colour(0xffc8c8c8));
-    g.setFont(juce::FontOptions(kInfoFont));
+    g.setFont(panelFont(kInfoFont, juce::Font::plain));
     g.drawFittedText(helpText,
                      getLocalBounds().removeFromBottom(kInfoBarHeight).reduced(16, 5)
                          .withTrimmedLeft(nameWidth),

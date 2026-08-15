@@ -6,6 +6,27 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(JUCE)
 
+# The panel's typeface, embedded rather than looked up on the host.  JUCE's
+# default is whatever the machine calls "sans-serif", which is a different font
+# on every OS -- so without this the plugin looks different everywhere and the
+# label widths the layout depends on are not knowable at build time.
+#
+# Liberation Sans is under the SIL Open Font License 1.1, which permits
+# embedding and redistribution, including commercially.  It is bundled
+# unmodified; see resources/fonts/LICENSE-Liberation.txt, which ships with the
+# plugin.  Modifying it would trigger the OFL's Reserved Font Name clause and
+# require renaming.
+juce_add_binary_data(EPMK2_fonts
+    HEADER_NAME EpMk2Fonts.h
+    NAMESPACE   EpMk2Fonts
+    SOURCES
+        resources/fonts/LiberationSans-Regular.ttf
+        resources/fonts/LiberationSans-Bold.ttf)
+
+# The plugin targets are shared libraries, so anything linked into them has to
+# be position independent.
+set_target_properties(EPMK2_fonts PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+
 juce_add_plugin(EPMK2
     PRODUCT_NAME            "EP-MK2"
     COMPANY_NAME            "defensem3ch"
@@ -34,6 +55,7 @@ target_compile_definitions(EPMK2 PUBLIC
 
 target_link_libraries(EPMK2
     PRIVATE
+        EPMK2_fonts
         juce::juce_audio_utils
     PUBLIC
         juce::juce_recommended_config_flags
@@ -56,7 +78,7 @@ target_compile_definitions(EPMK2_tests PUBLIC
     JUCE_STANDALONE_APPLICATION=1)
 
 target_link_libraries(EPMK2_tests
-    PRIVATE juce::juce_audio_utils
+    PRIVATE EPMK2_fonts juce::juce_audio_utils
     PUBLIC  juce::juce_recommended_config_flags)
 
 # ---------------------------------------------------------------------------
@@ -75,7 +97,7 @@ target_compile_definitions(EPMK2_playmidi PUBLIC
     JUCE_STANDALONE_APPLICATION=1)
 
 target_link_libraries(EPMK2_playmidi
-    PRIVATE juce::juce_audio_utils juce::juce_audio_formats
+    PRIVATE EPMK2_fonts juce::juce_audio_utils juce::juce_audio_formats
     PUBLIC  juce::juce_recommended_config_flags)
 
 # ---------------------------------------------------------------------------
@@ -95,5 +117,5 @@ target_compile_definitions(EPMK2_bank PUBLIC
     JUCE_STANDALONE_APPLICATION=1)
 
 target_link_libraries(EPMK2_bank
-    PRIVATE juce::juce_audio_utils juce::juce_audio_formats
+    PRIVATE EPMK2_fonts juce::juce_audio_utils juce::juce_audio_formats
     PUBLIC  juce::juce_recommended_config_flags)
