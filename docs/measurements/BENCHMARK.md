@@ -127,6 +127,44 @@ stays matched at any setting.
 Whether that is the instrument or its sampling is not something this capture
 can answer.
 
+## Attack
+
+```
+attack   -4.3 ms, spread 6.6
+```
+
+The model arrives about 4 ms sooner than the instrument. Measured as the time
+to reach 90% of the loudest the note gets in its first 300 ms, from the point
+it leaves silence.
+
+Taking the position of the overall peak instead -- which is what this did at
+first -- is unusable: several reference notes peak most of a second in as
+partials beat together, which says nothing about how the attack arrives. That
+estimator reported −25.5 ms with a spread of 37.7, all of it noise.
+
+## Tine decay: measurable in principle, not from this reference
+
+`Tine Decay` is 225 and has nothing behind it. It still has.
+
+A short-window estimator was written for it, since `decay_q` fits to the note's
+release and a tine mode at Q≈225 is gone in a fraction of that -- it returned
+Q in the thousands for partials that decayed in a tenth of a second.
+`decay_q_fast` starts at the partial's own peak and stops once it has fallen
+25 dB. **Validated against synthetic decays: 225 → 225, 1750 → 1750, 50 → 50,
+r² = 1.000 in every case.**
+
+It still cannot measure the tine, on either side, because the partial is not
+isolated enough inside a complete note -- fits come back with r² of 0.00 to
+0.33. Worse, the "strongest inharmonic partial" it is pointed at is unreliable
+in the reference: the peaks found sit at 3.4x to 5.6x, which are more likely
+mis-detected harmonics than tine modes, since the library's spectrum is
+overwhelmingly harmonic to begin with.
+
+Measuring this properly needs a narrow band-pass around a mode whose frequency
+is known in advance, and a reference whose tine content is strong enough to
+follow. Neither is true here. The estimator is kept because it is correct and
+the next capture may support it.
+
 ## Still open
 
 

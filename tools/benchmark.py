@@ -24,8 +24,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from analyse_samples import (load_metadata, load_mono, refine_f0, find_release,
-                             partial_ratios, decay_q, centroid, trustworthy,
-                             validate)
+                             partial_ratios, decay_q, decay_q_fast, centroid,
+                             trustworthy, validate, attack_time)
 
 
 def model_files(directory):
@@ -93,21 +93,6 @@ def harmonics(x, rate, f0, count=6):
     if base <= 0:
         return []
     return [20 * math.log10(max(at(f0 * n), 1e-12) / base) for n in range(2, count + 1)]
-
-
-def attack_time(x, rate, release):
-    """How long the note takes to reach its peak, in milliseconds.
-
-    Contact time and the resonators' build-up both land here, and nothing has
-    ever compared it -- the spectral measurements say what a note contains,
-    not how it arrives.
-    """
-    held = x[: int(min(release, 0.5) * rate)]
-    if len(held) == 0:
-        return None
-    env = np.abs(held)
-    peak = int(np.argmax(env))
-    return 1000.0 * peak / rate
 
 
 def line(label, a, b, unit="", fmt="{:.1f}"):
@@ -200,7 +185,7 @@ def main():
     print(f"Reference instrument vs the model, velocity 0x{args.velocity:02X}")
     print(f"  {'':<26} {'instrument':>10} {'model':>10} {'difference':>10}\n")
 
-    gaps = dict(decay=[], centroid=[], tine=[], sub=[], harm=[], attack=[])
+    gaps = dict(decay=[], centroid=[], tine=[], sub=[], harm=[], attack=[], tineq=[])
     for note in notes:
         ref = next((m for m in meta if m["note"] == note
                     and m["velocity"] == args.velocity), None)
@@ -244,11 +229,20 @@ def main():
                   + " |" + " ".join(f"{v:>5.0f}" for v in hb))
             gaps["harm"].append(statistics.mean(hb) - statistics.mean(ha))
 
-        ta = attack_time(xa, ra, rel_a)
-        tb = attack_time(xb, rb, rel_b)
+        ta = attack_time(xa, ra)
+        tb = attack_time(xb, rb)
         if ta is not None and tb is not None:
             print(line("attack (ms)", ta, tb, fmt="{:.1f}"))
             gaps["attack"].append(tb - ta)
+
+        # The tine's own decay, which needs a short window: at Q around 225 it
+        # is gone before the fundamental has begun to fade.
+        if a["inharmonic"] and b["inharmonic"]:
+            da = decay_q_fast(xa, ra, a["inharmonic"]["freq"])
+            db = decay_q_fast(xb, rb, b["inharmonic"]["freq"])
+            if trustworthy(da) and trustworthy(db):
+                print(line("tine decay (Q)", da["q"], db["q"], fmt="{:.0f}"))
+                gaps["tineq"].append(20 * math.log10(db["q"] / da["q"]))
 
         if a["sub"] and b["sub"]:
             print(line("sub-fundamental (x f0)", a["sub"]["ratio"],
@@ -272,6 +266,10 @@ def main():
     if gaps["harm"]:
         print(f"  harmonics  {statistics.mean(gaps['harm']):+6.1f} dB, "
               f"spread {statistics.pstdev(gaps['harm']):.1f}")
+    if gaps["tineq"]:
+        print(f"  tine decay {statistics.mean(gaps['tineq']):+6.1f} dB of Q, "
+              f"spread {statistics.pstdev(gaps['tineq']):.1f}  "
+              f"({len(gaps['tineq'])} notes)")
     if gaps["attack"]:
         print(f"  attack     {statistics.mean(gaps['attack']):+6.1f} ms, "
               f"spread {statistics.pstdev(gaps['attack']):.1f}")

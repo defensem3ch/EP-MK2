@@ -271,6 +271,89 @@ def decay_q(x, rate, freq, skip=0.05, tail=0.03, until=None):
                 tau=float(-1.0 / slope), window=float((b - a) / rate))
 
 
+def decay_q_fast(x, rate, freq, window=0.4, floor_db=25.0):
+    """Decay of a partial that does not last, expressed as Q.
+
+    `decay_q` fits from just after the attack to the note's release, which is
+    right for the fundamental and useless for a tine mode: at Q around 225 a
+    partial at 7x the note is gone inside a couple of hundred milliseconds, so
+    that fit spends most of its window on the noise floor and returns a Q in
+    the thousands for something that decayed in a tenth of a second.
+
+    This one starts at the partial's own peak and stops as soon as it has
+    fallen `floor_db`, or after `window`, whichever comes first.
+    """
+    t = np.arange(len(x)) / rate
+    mixed = x * np.exp(-2j * math.pi * freq * t)
+
+    # Two cycles, which is short enough to follow a fast decay.
+    win = max(64, int(round(2.0 * rate / max(freq, 1.0))))
+    env = np.abs(np.convolve(mixed, np.ones(win) / win, mode="same"))
+
+    limit = min(len(env), int(window * rate) + win)
+    seg = env[:limit]
+    if len(seg) < 4 * win:
+        return None
+
+    start = int(np.argmax(seg))
+    seg = seg[start:]
+    if len(seg) < 3 * win or seg[0] <= 0:
+        return None
+
+    # Stop once it has fallen far enough to be into the noise.
+    floor = seg[0] * (10.0 ** (-floor_db / 20.0))
+    below = np.nonzero(seg < floor)[0]
+    if len(below):
+        seg = seg[: below[0]]
+    if len(seg) < 3 * win:
+        return None
+
+    y = np.log(np.maximum(seg, seg.max() * 1e-6))
+    tt = np.arange(len(seg)) / rate
+    slope, intercept = np.polyfit(tt, y, 1)
+    if slope >= 0:
+        return None
+
+    resid = y - (slope * tt + intercept)
+    ss_tot = float(((y - y.mean()) ** 2).sum())
+    r2 = 1.0 - float((resid ** 2).sum()) / ss_tot if ss_tot > 0 else 0.0
+    span_db = 20.0 / math.log(10) * (y[0] - y[-1])
+
+    return dict(q=float(math.pi * freq / -slope), r2=float(r2),
+                span_db=float(span_db), window=float(len(seg) / rate))
+
+
+def attack_time(x, rate, within=0.3):
+    """Milliseconds from the note starting to it arriving, in effect.
+
+    Measured as the time to reach 90% of the loudest the note gets in its first
+    `within` seconds, from the point it leaves silence.  Taking the position of
+    the overall peak instead is what made this unusable across the reference:
+    several of its notes peak most of a second in, as partials beat together,
+    which says nothing about how the attack arrives.
+    """
+    env = np.abs(x)
+    if env.max() <= 0:
+        return None
+
+    onset = np.nonzero(env > env.max() * 0.01)[0]
+    if not len(onset):
+        return None
+    start = int(onset[0])
+
+    head = env[start : start + int(within * rate)]
+    if len(head) < int(0.01 * rate):
+        return None
+
+    # Smooth over 3 ms so a single sample cannot decide it.
+    k = max(1, int(0.003 * rate))
+    head = np.convolve(head, np.ones(k) / k, mode="same")
+
+    target = head.max() * 0.9
+    reach = np.nonzero(head >= target)[0]
+    return 1000.0 * float(reach[0]) / rate if len(reach) else None
+
+
 def centroid(x, rate, above=0.0):
     """Spectral centroid, optionally ignoring everything below `above` Hz.
 
