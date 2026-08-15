@@ -85,16 +85,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find_tool() { find build -type f -name "$1" -perm -u+x | head -1; }
+          # Case-insensitive, and ? for the separator, because the binaries are
+          # not consistently named: juce_add_console_app's PRODUCT_NAME names
+          # the artefact *folder* and leaves the executable as the target name,
+          # so EPMK2_tests sits next to epmk2-scaletest.  A case-sensitive
+          # pattern found neither and handed the shell an empty string, which
+          # is an exit code 127 that says nothing about which tool was missing.
+          #
+          # .dSYM is excluded because macOS puts a file of the same name inside
+          # the debug bundle, and that one is not the executable.
+          find_tool() {
+            local found
+            found=$(find build -type f -iname "$1" ! -path '*.dSYM*' | head -1)
+            if [ -z "$found" ]; then
+              echo "no binary matching $1 under build/" >&2
+              find build -maxdepth 3 -type f -iname 'epmk2*' >&2
+              return 1
+            fi
+            echo "$found"
+          }
           if [ "${{ matrix.name }}" = "linux" ]; then
             run() { xvfb-run -a "$@"; }
           else
             run() { "$@"; }
           fi
 
-          run "$(find_tool 'epmk2-tests*')"
-          "$(find_tool 'epmk2-scaletest*')"
-          "$(find_tool 'epmk2-claptest*')" "$(find build -name 'EP-MK2.clap' | head -1)"
+          run "$(find_tool 'epmk2?tests*')"
+          "$(find_tool 'epmk2?scaletest*')"
+          "$(find_tool 'epmk2?claptest*')" "$(find build -name 'EP-MK2.clap' | head -1)"
 
       - name: Stage
         run: cmake --install build --config Release --prefix dist --component dist
