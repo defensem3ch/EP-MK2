@@ -1460,15 +1460,22 @@ int main()
                       "knob rows line up across the columns", rb);
             }
 
-            // Value boxes sitting flush on the section border look unfinished.
-            int tightest = 10000;
-            juce::String tightestName;
+            // A section's padding must be the same top and bottom.  Checking
+            // the bottom against a floor instead let them drift apart: the
+            // gap under the last row grew to three times the gap under the
+            // header and the test had nothing to say about it.
+            int worstAsymmetry = 0, tightest = 10000;
+            juce::String tightestName, asymmetricName;
             std::function<void(juce::Component*)> margins = [&](juce::Component* comp) {
                 for (int k = 0; k < comp->getNumChildComponents(); ++k) {
                     auto* child = comp->getChildComponent(k);
                     if (auto* sec = dynamic_cast<ParamSection*>(child)) {
-                        const int m = sec->bottomMargin();
-                        if (m < tightest) { tightest = m; tightestName = sec->getName(); }
+                        const int top = sec->topMargin(), bottom = sec->bottomMargin();
+                        if (std::abs(top - bottom) > worstAsymmetry) {
+                            worstAsymmetry = std::abs(top - bottom);
+                            asymmetricName = sec->getName();
+                        }
+                        if (bottom < tightest) { tightest = bottom; tightestName = sec->getName(); }
                     }
                     margins(child);
                 }
@@ -1532,10 +1539,14 @@ int main()
             snprintf(mh, sizeof mh, "  (%d without)", missingHelp);
             check(missingHelp == 0, "every control explains itself", mh);
 
-            char bm[96];
-            snprintf(bm, sizeof bm, "  (%d px, tightest is %s)",
-                     tightest, tightestName.toRawUTF8());
-            check(tightest >= 10, "sections have room below their last row", bm);
+            char bm[160];
+            snprintf(bm, sizeof bm, "  (%d px of padding, tightest is %s;"
+                                    " worst top-to-bottom gap %d px%s%s)",
+                     tightest, tightestName.toRawUTF8(), worstAsymmetry,
+                     worstAsymmetry ? " at " : "",
+                     worstAsymmetry ? asymmetricName.toRawUTF8() : "");
+            check(tightest >= 6 && worstAsymmetry == 0,
+                  "sections are padded the same top and bottom", bm);
 
             char ov[128];
             snprintf(ov, sizeof ov, "  (%d control%s without a place%s%s)",

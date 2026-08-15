@@ -53,6 +53,9 @@ public:
     // the symptom is a *missing* control rather than one hanging outside.
     int controlsNotPlaced() const;
     // Space between the lowest control and the bottom of the section.
+    // The space above the first row and below the last.  A section should
+    // show the same, and the same as the gap between its rows.
+    int topMargin() const;
     int bottomMargin() const;
 
 private:
@@ -119,7 +122,7 @@ public:
 
 private:
     // Where each section sits, packed rather than laid out on a fixed grid.
-    void computeLayout(int width);
+    void computeLayout();
 
     struct Placement { int column, y, height; };
 
@@ -146,7 +149,7 @@ public:
     // and narrow, which is the wrong shape for a screen.
     // Set by the type, not chosen: three columns of four controls at the
     // width the longest name needs on one line.  See kControlWidth.
-    static constexpr int kDesignWidth  = 1840;
+    static constexpr int kDesignWidth  = 1988;
     // Height comes from the panel's contents; see PanelContent::designHeight.
     int designHeight = 0;
 

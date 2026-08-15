@@ -9,14 +9,44 @@
 using namespace epmk2::params;
 
 namespace {
-// Wide enough that no name has to wrap: the longest, "Hammer to Pickup", is
-// 141px on one line at kLabelFont, and a control gives its name four pixels
-// less than its own width.  Everything about how the names sit follows from
-// that -- one line of name instead of two, the name against its own knob, and
-// no ragged line starts along a row.  It is what sets the design width, so
-// raising kLabelFont widens the whole panel.  The test below measures it.
-constexpr int kControlWidth  = 146;
-constexpr int kControlHeight = 141;   // see the breakdown below
+// Spacing, of which there are exactly two kinds.
+//
+// kGutter is the gap *between* boxes, and between a box and the edge of what
+// contains it: panel to section, section to section, section to control,
+// control to control.  kCellPad is the space *inside* a control, from its own
+// edge to its contents, on all four sides.
+//
+// This used to space by shrinking each box instead, which is what made the
+// gaps uneven: two neighbours each gave up 2px and ended 4px apart, while a
+// box against the edge of its container gave up 2 and the container gave up
+// 8, so it sat 10px in.  Nothing shrinks now.  Boxes are laid out with gaps
+// between them, so a gap is one number wherever it appears.
+constexpr int kGutter        = 8;
+constexpr int kCellPad       = 6;
+
+// Controls per row inside a section.  Fixed rather than derived from the
+// width, because the width is derived from *it*.
+constexpr int kInnerColumns  = 4;
+
+// A control is as wide as the longest name it may have to show on one line --
+// "Hammer to Pickup" at kLabelFont, measured -- plus its own padding.  One
+// line of name is what lets the name sit against its knob with no ragged line
+// starts along a row, and it is why raising kLabelFont widens the whole panel.
+// The test below is what keeps this number honest.
+constexpr int kNameWidth     = 141;
+constexpr int kControlWidth  = kNameWidth + 2 * kCellPad;
+
+// What a control's height is made of.  The knob is drawn into the square that
+// fits its box, so at this width the box's *height* is what sets the knob's
+// size.  47 left a knob adrift in its cell and 72 was a dial with a caption;
+// 58 is between them, and reads as a control with a name on it.
+constexpr int kLabelArea     = 21;   // one line of name, all any of them needs
+constexpr int kKnobTop       = 5;    // so the knob is not against its name
+constexpr int kKnobArea      = 58;   // the square the knob is drawn into
+constexpr int kValueBox      = 27;   // the slider's own text box
+constexpr int kControlHeight = kCellPad + kLabelArea + kKnobTop
+                             + kKnobArea + kValueBox + kCellPad;
+
 constexpr int kSectionHeader = 30;
 constexpr int kHeaderHeight  = 56;
 
@@ -99,37 +129,21 @@ inline void fillVertical(juce::Graphics& g, juce::Rectangle<float> r,
                                            juce::Colour(bottom), r.getX(), r.getBottom(),
                                            false));
 }
-// What a control's height is made of.  The knob is drawn into the square that
-// fits its box, so at this width the box's *height* is what sets the knob's
-// size.  47 left a knob adrift in its cell and 72 was a dial with a caption;
-// 58 is between them, and reads as a control with a name on it.
-//
-// These have to add up to kControlHeight, which is asserted below.
-constexpr int   kLabelArea   = 21;   // one line of name, all any of them needs
-constexpr int   kKnobTop     = 5;    // so the knob is not against its name
-constexpr int   kKnobArea    = 58;   // the square the knob is drawn into
-constexpr int   kValueBox    = 27;   // the slider's own text box
-constexpr int   kCellBottom  = 6;    // tint below the value box, so it is not flush
-constexpr int   kRowGap      = 24;   // untinted space before the next row
-static_assert(kLabelArea + kKnobTop + kKnobArea + kValueBox + kCellBottom + kRowGap
-                  == kControlHeight,
-              "a control's parts must fill its height");
-// Space between the section's coloured header and the first row of names.
-// Paired with kSectionBottomPad: the header is a solid block of colour and
-// the names are the first thing under it, so with only a few pixels between
-// them the names read as part of the header rather than as part of the row.
-constexpr int   kSectionTopPad = 14;
-// Space below the last row of controls, inside a section.  Note a section is
-// inset by 4 on every side when it is positioned, so 8 of this is eaten by
-// that -- allowing only kPad here left the bottom row of value boxes sitting
-// flush on the section border.
-constexpr int   kSectionBottomPad = 22;
 // A fixed strip rather than a floating tooltip: it does not cover the control
 // being read, it does not wait for a hover timeout, and it is visible before
 // anyone thinks to look for it.
-constexpr int   kInfoBarHeight = 52;
-constexpr int kPad           = 8;
+constexpr int kInfoBarHeight = 52;
 constexpr int kSectionColumns = 3;
+
+// Derived, not chosen.  A section holds kInnerColumns controls with a gutter
+// between each and one at either end; the panel holds kSectionColumns sections
+// the same way.  The assert is what stops kDesignWidth, which has to be in the
+// header, from drifting away from the arithmetic that produced it.
+constexpr int kSectionWidth  = kInnerColumns * kControlWidth
+                             + (kInnerColumns + 1) * kGutter;
+static_assert(EpMk2Editor::kDesignWidth
+                  == kSectionColumns * kSectionWidth + (kSectionColumns + 1) * kGutter,
+              "kDesignWidth must be what the gutters and controls add up to");
 }
 
 //==============================================================================
@@ -187,8 +201,7 @@ void ParamControl::paint(juce::Graphics& g)
     // row's label directly beneath, at the same spacing as the gap inside the
     // control -- and the eye pairs the value with the wrong name.  This is the
     // cheapest way to say which three things belong together.
-    const auto cell = getLocalBounds().withTrimmedBottom(kRowGap)
-                                      .reduced(2, 1).toFloat();
+    const auto cell = getLocalBounds().toFloat();
     fillVertical(g, cell, col::cellTop, col::cellBottom);
     g.fillRoundedRectangle(cell, 4.0f);
 
@@ -211,27 +224,26 @@ void ParamControl::paint(juce::Graphics& g)
     // shrinks the font height too.  Forbidding both means every label on the
     // panel is drawn at exactly the same size, and the cell has to be wide
     // enough for the longest word instead.
-    g.drawFittedText(label, getLocalBounds().removeFromTop(kLabelArea).reduced(2, 0),
+    g.drawFittedText(label, getLocalBounds().reduced(kCellPad, 0)
+                                            .withTrimmedTop(kCellPad)
+                                            .removeFromTop(kLabelArea),
                      juce::Justification::centredTop, 1, 1.0f);
 }
 
 void ParamControl::resized()
 {
     auto r = getLocalBounds();
-    r.removeFromTop(kLabelArea);
+    r.removeFromTop(kCellPad + kLabelArea + kKnobTop);
+    r.removeFromBottom(kCellPad);       // r is the knob and its value box
+
     if (isToggle)
-        // In the same band as the knobs, so a toggle sits on the row rather
-        // than floating between it and the row below.  It has no value box,
-        // and centring it in the space that includes one dropped it low.
-        button.setBounds(r.withTrimmedTop(kKnobTop)
-                          .withTrimmedBottom(kValueBox + kCellBottom + kRowGap)
+        // In the knobs' own band, so a toggle sits on the row rather than
+        // floating between it and the row below.  It has no value box, and
+        // centring it in the space that allows for one dropped it low.
+        button.setBounds(r.removeFromTop(kKnobArea)
                           .withSizeKeepingCentre(kKnobArea, kKnobArea));
     else
-        // The bottom trim is the gap *between* rows, and it has to be clearly
-        // larger than the space between a knob and its own value, or proximity
-        // groups the value with the row beneath it instead.
-        slider.setBounds(r.reduced(4, 0).withTrimmedTop(kKnobTop)
-                                        .withTrimmedBottom(kCellBottom + kRowGap));
+        slider.setBounds(r.reduced(kCellPad, 0));
 }
 
 //==============================================================================
@@ -254,29 +266,32 @@ int ParamSection::controlsNotPlaced() const
     int bad = 0;
     for (const auto* c : controls) {
         const auto b = c->getBounds();
-        // Against the tinted block, not the whole cell: a cell's last kRowGap
-        // is the space before the next row, so the bottom row's hangs off the
-        // section by design.  Nothing is drawn in it.
         if (b.getWidth() < kControlWidth / 2 || b.getHeight() < kControlHeight / 2
-            || !getLocalBounds().contains(b.withTrimmedBottom(kRowGap)))
+            || !getLocalBounds().contains(b))
             ++bad;
     }
     return bad;
 }
 
+int ParamSection::topMargin() const
+{
+    int highest = getHeight();
+    for (const auto* c : controls)
+        highest = juce::jmin(highest, c->getY());
+    return highest - kSectionHeader;
+}
+
 int ParamSection::bottomMargin() const
 {
-    // To the bottom of the tinted block, which is what is actually seen.  A
-    // cell extends kRowGap past it, and the last row's overhangs the section.
     int lowest = 0;
     for (const auto* c : controls)
-        lowest = juce::jmax(lowest, c->getBottom() - kRowGap);
+        lowest = juce::jmax(lowest, c->getBottom());
     return getHeight() - lowest;
 }
 
 int ParamSection::columnsForWidth(int width)
 {
-    return juce::jmax(1, (width - 2 * kPad) / kControlWidth);
+    return juce::jmax(1, (width + kGutter) / (kControlWidth + kGutter));
 }
 
 void ParamSection::paint(juce::Graphics& g)
@@ -292,29 +307,26 @@ void ParamSection::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour(0xff262626));
     g.setFont(panelFont(kSectionFont));
-    g.drawText(title.toUpperCase(), header.reduced(8.0f, 0.0f),
+    g.drawText(title.toUpperCase(), header.reduced((float) kGutter, 0.0f),
                juce::Justification::centredLeft);
 }
 
 void ParamSection::resized()
 {
-    // Positioned by index rather than by consuming the height, because the
-    // section is deliberately kRowGap shorter than its rows add up to: the
-    // last row's gap belongs to the row above it, not to the section, so it
-    // hangs off the bottom.  Taking rows off a rectangle would silently hand
-    // the last one whatever was left and shrink it.
-    const int width = getWidth() - 2 * kPad;
-    const int columns = juce::jmax(1, width / kControlWidth);
+    // Positioned by index rather than by consuming a rectangle: with gutters
+    // between the rows, taking each row off the top would have to take the
+    // gutter too, and the last row would be handed whatever was left.
+    const int inner = getWidth() - 2 * kGutter;
+    const int columns = kInnerColumns;
+    const int cellW = (inner - (columns - 1) * kGutter) / columns;
 
-    int y = kSectionHeader + kSectionTopPad;
-    for (int i = 0; i < controls.size(); y += kControlHeight) {
-        auto row = juce::Rectangle<int>(kPad, y, width, kControlHeight);
-
-        // A short last row still divides by the full column count, so its
-        // cells stay under the ones above rather than spreading out.
+    int y = kSectionHeader + kGutter;
+    for (int i = 0; i < controls.size(); y += kControlHeight + kGutter)
+        // A short last row leaves its cells under the ones above rather than
+        // spreading them across the width.
         for (int c = 0; c < columns && i < controls.size(); ++c, ++i)
-            controls[i]->setBounds(row.removeFromLeft(row.getWidth() / (columns - c)));
-    }
+            controls[i]->setBounds(kGutter + c * (cellW + kGutter), y,
+                                   cellW, kControlHeight);
 }
 
 //==============================================================================
@@ -443,7 +455,7 @@ PanelContent::PanelContent(EpMk2Processor& p, juce::AudioProcessorValueTreeState
     for (const auto& name : sectionOrder())
         addAndMakeVisible(sections.add(new ParamSection(tree, name)));
 
-    computeLayout(EpMk2Editor::kDesignWidth);
+    computeLayout();
 }
 
 void PanelContent::showHelp(const juce::String& name, const juce::String& text)
@@ -528,24 +540,25 @@ void PanelContent::paint(juce::Graphics& g)
 // controls, so an equal split both cut the bottom off Tine and drew Output as
 // a mostly empty box four rows tall.  Packing keeps the columns level and the
 // panel as short as its contents allow.
-void PanelContent::computeLayout(int width)
+void PanelContent::computeLayout()
 {
-    const int cellW = (width - 2 * kPad) / kSectionColumns;
-    // A section is inset by 4 either side inside its column.
-    const int innerCols = ParamSection::columnsForWidth(cellW - 8);
+    const int innerCols = kInnerColumns;
 
+    // tall is what a section is; slot is what it occupies in its column --
+    // itself plus the gutter to whatever comes next.  The packing and the
+    // snapping both work in slots, or a column carrying more sections than
+    // its neighbour comes up short by a gutter for each one.
     const int n = sections.size();
-    std::vector<int> tall((size_t) n);
-    for (int i = 0; i < n; ++i)
-        // Less kRowGap: that gap separates one row from the next, so the
-        // last row has nothing to be separated from and the section would
-        // otherwise carry it as padding on top of its own -- which is what
-        // made the space under a section's last row look wrong against the
-        // space under its header.
-        tall[(size_t) i] = kSectionHeader + kSectionTopPad
-                         + sections[i]->rowsNeeded(innerCols) * kControlHeight
-                         - kRowGap
-                         + kSectionBottomPad;
+    std::vector<int> tall((size_t) n), slot((size_t) n);
+    for (int i = 0; i < n; ++i) {
+        // A gutter under the header, one between each pair of rows, and one
+        // at the bottom -- so the space above the first row and below the last
+        // is the same, and the same as the space between them.
+        const int rows = sections[i]->rowsNeeded(innerCols);
+        tall[(size_t) i] = kSectionHeader + rows * kControlHeight
+                         + (rows + 1) * kGutter;
+        slot[(size_t) i] = tall[(size_t) i] + kGutter;
+    }
 
     // Split the sections into three *contiguous* runs, one per column, and
     // keep the split with the shortest tallest column.
@@ -567,7 +580,7 @@ void PanelContent::computeLayout(int width)
             int used[kSectionColumns] = {};
             for (int i = 0; i < n; ++i) {
                 const int c = i < firstCut ? 0 : (i < secondCut ? 1 : 2);
-                used[c] += tall[(size_t) i];
+                used[c] += slot[(size_t) i];
             }
             int hi = 0, lo = std::numeric_limits<int>::max();
             for (int c = 0; c < kSectionColumns; ++c) {
@@ -603,14 +616,14 @@ void PanelContent::computeLayout(int width)
     // taking the rows off the grid.
     int total[kSectionColumns] = {};
     for (int i = 0; i < n; ++i)
-        total[best[(size_t) i]] += tall[(size_t) i];
+        total[best[(size_t) i]] += slot[(size_t) i];
 
     int ref = 0;
     for (int c = 1; c < kSectionColumns; ++c)
         if (total[c] > total[ref])
             ref = c;
 
-    const int overhead = kSectionHeader + kSectionTopPad;
+    const int overhead = kSectionHeader + kGutter;
     std::vector<int> rowTop;   // ascending, so the first match is the nearest
     {
         int y = 0;
@@ -618,8 +631,8 @@ void PanelContent::computeLayout(int width)
             if (best[(size_t) i] == ref) {
                 const int rows = sections[i]->rowsNeeded(innerCols);
                 for (int k = 0; k < rows; ++k)
-                    rowTop.push_back(y + overhead + k * kControlHeight);
-                y += tall[(size_t) i];
+                    rowTop.push_back(y + overhead + k * (kControlHeight + kGutter));
+                y += slot[(size_t) i];
             }
     }
 
@@ -633,16 +646,18 @@ void PanelContent::computeLayout(int width)
                 const int top = row - overhead;
                 // Never past the bottom of the panel: a section that cannot be
                 // snapped without overflowing stays where it was.
-                if (top >= cursor[c] && top + tall[(size_t) i] <= bestTallest) {
+                if (top >= cursor[c] && top + slot[(size_t) i] <= bestTallest) {
                     y = top;
                     break;
                 }
             }
         placements.push_back({ c, y, tall[(size_t) i] });
-        cursor[c] = y + tall[(size_t) i];
+        cursor[c] = y + slot[(size_t) i];
     }
 
-    height = kHeaderHeight + 2 * kPad + bestTallest + kInfoBarHeight;
+    // bestTallest carries a trailing gutter for the last section in its
+    // column, which has nothing after it to be separated from.
+    height = kHeaderHeight + 2 * kGutter + bestTallest - kGutter + kInfoBarHeight;
 }
 
 void PanelContent::resized()
@@ -650,14 +665,17 @@ void PanelContent::resized()
     auto r = getLocalBounds();
     r.removeFromTop(kHeaderHeight);
     r.removeFromBottom(kInfoBarHeight);
-    r.reduce(kPad, kPad);
+    r.reduce(kGutter, kGutter);
 
-    const int cellW = r.getWidth() / kSectionColumns;
+    // Laid out with a gutter between the columns rather than sliced into
+    // thirds and shrunk, so a section sits the same distance from its
+    // neighbour as from the edge of the panel.
+    const int sectionW = (r.getWidth() - (kSectionColumns - 1) * kGutter)
+                       / kSectionColumns;
     for (int i = 0; i < sections.size() && i < (int)placements.size(); ++i) {
         const auto& pl = placements[(size_t)i];
-        sections[i]->setBounds(juce::Rectangle<int>(r.getX() + pl.column * cellW,
-                                                    r.getY() + pl.y,
-                                                    cellW, pl.height).reduced(4));
+        sections[i]->setBounds(r.getX() + pl.column * (sectionW + kGutter),
+                               r.getY() + pl.y, sectionW, pl.height);
     }
 }
 
