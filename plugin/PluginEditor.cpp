@@ -60,6 +60,11 @@ inline void fillVertical(juce::Graphics& g, juce::Rectangle<float> r,
 // Room for two lines of label.
 // Two lines of name, so every knob below it is the same size.
 constexpr int   kLabelArea   = 36;
+// Space between the section's coloured header and the first row of names.
+// Paired with kSectionBottomPad: the header is a solid block of colour and
+// the names are the first thing under it, so with only a few pixels between
+// them the names read as part of the header rather than as part of the row.
+constexpr int   kSectionTopPad = 14;
 // Space below the last row of controls, inside a section.  Note a section is
 // inset by 4 on every side when it is positioned, so 8 of this is eaten by
 // that -- allowing only kPad here left the bottom row of value boxes sitting
@@ -223,7 +228,7 @@ void ParamSection::paint(juce::Graphics& g)
 void ParamSection::resized()
 {
     auto r = getLocalBounds().reduced(kPad, 0);
-    r.removeFromTop(kSectionHeader + 4);
+    r.removeFromTop(kSectionHeader + kSectionTopPad);
 
     const int columns = juce::jmax(1, r.getWidth() / kControlWidth);
     int i = 0;
@@ -444,7 +449,7 @@ void PanelContent::computeLayout(int width)
     const int n = sections.size();
     std::vector<int> tall((size_t) n);
     for (int i = 0; i < n; ++i)
-        tall[(size_t) i] = kSectionHeader + 4
+        tall[(size_t) i] = kSectionHeader + kSectionTopPad
                          + sections[i]->rowsNeeded(innerCols) * kControlHeight
                          + kSectionBottomPad;
 
