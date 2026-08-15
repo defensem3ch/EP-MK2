@@ -28,6 +28,12 @@ public:
     const juce::String& drawnName() const { return label; }
     const juce::String& infoName()  const { return fullName; }
 
+    // Greyed out, with a reason.  A control that does nothing should say so
+    // rather than simply failing to respond -- so the reason goes in front of
+    // the help text, and the cell stays hoverable to deliver it.
+    virtual void setDimmed(bool, const juce::String& reason);
+    bool isDimmed() const { return dimmed; }
+
 protected:
     // The part of the cell below the name, which is where a subclass puts
     // whatever the cell actually operates.
@@ -41,6 +47,8 @@ private:
     juce::String label;
     juce::String fullName;
     juce::String help;
+    juce::String dimReason;
+    bool dimmed = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PanelCell)
 };
@@ -87,6 +95,7 @@ public:
     ParamControl(juce::AudioProcessorValueTreeState& tree, const epmk2::params::Spec& spec);
 
     void resized() override;
+    void setDimmed(bool, const juce::String& reason) override;
 
 private:
     bool isToggle;
@@ -105,6 +114,10 @@ class ParamSection : public juce::Component
 {
 public:
     ParamSection(juce::AudioProcessorValueTreeState& tree, const juce::String& name);
+
+    // The cell whose full name is this, or null.  Used to grey out the
+    // controls a loaded scale takes over from.
+    PanelCell* cellNamed(const juce::String& fullName) const;
 
     void resized() override;
     void paint(juce::Graphics&) override;
@@ -176,6 +189,7 @@ public:
     void resized() override;
 
     void setVoiceCount(int n);
+    PanelCell* cellNamed(const juce::String& fullName) const;
     // The scale can change without the panel doing it -- loading a session is
     // the usual way -- and unlike every other control it is not attached to a
     // parameter, so nothing reports it.

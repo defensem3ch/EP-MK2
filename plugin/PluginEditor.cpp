@@ -226,7 +226,16 @@ PanelCell::PanelCell(const juce::String& drawn, const juce::String& full,
 void PanelCell::mouseEnter(const juce::MouseEvent&)
 {
     if (auto* panel = findParentComponentOfClass<PanelContent>())
-        panel->showHelp(fullName, help);
+        panel->showHelp(fullName, dimmed ? dimReason + " " + help : help);
+}
+
+void PanelCell::setDimmed(bool on, const juce::String& reason)
+{
+    if (on == dimmed && reason == dimReason)
+        return;
+    dimmed = on;
+    dimReason = reason;
+    setAlpha(on ? 0.42f : 1.0f);
 }
 
 void PanelCell::mouseExit(const juce::MouseEvent&)
@@ -277,6 +286,17 @@ void PanelCell::paint(juce::Graphics& g)
                                             .withTrimmedTop(kCellPad)
                                             .removeFromTop(kLabelArea),
                      juce::Justification::centredTop, 1, 1.0f);
+}
+
+void ParamControl::setDimmed(bool on, const juce::String& reason)
+{
+    PanelCell::setDimmed(on, reason);
+    // The cell itself stays enabled: a disabled parent would swallow the
+    // hover, and the reason it is greyed out is the one thing worth reading.
+    // Disabling the slider is enough to make it inert, and a disabled child
+    // lets the mouse through to the cell behind it.
+    slider.setEnabled(! on);
+    button.setEnabled(! on);
 }
 
 void ParamControl::resized()
@@ -672,9 +692,35 @@ void PanelContent::showHelp(const juce::String& name, const juce::String& text)
     repaint(getLocalBounds().removeFromBottom(kInfoBarHeight));
 }
 
+PanelCell* ParamSection::cellNamed(const juce::String& fullName) const
+{
+    for (auto* c : controls)
+        if (c->infoName() == fullName)
+            return c;
+    return nullptr;
+}
+
+PanelCell* PanelContent::cellNamed(const juce::String& fullName) const
+{
+    for (auto* section : sections)
+        if (auto* c = section->cellNamed(fullName))
+            return c;
+    return nullptr;
+}
+
 void PanelContent::refreshScale()
 {
     scaleCell.refresh();
+
+    // A loaded scale is a table of steps, so how many steps there are and
+    // what they divide is no longer anyone's decision -- the scale says.
+    // Base Frequency and Base MIDI Note still apply: they set what the scale
+    // is measured from and which key stands at its root.
+    const bool unequal = ! proc.getScale().empty();
+    const juce::String why("Not in use: the loaded scale sets this.");
+    for (const char* name : { "Divisions", "Interval" })
+        if (auto* c = cellNamed(name))
+            c->setDimmed(unequal, why);
 }
 
 void PanelContent::setVoiceCount(int n)

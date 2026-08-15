@@ -191,9 +191,9 @@ inline const std::vector<Spec>& table()
           "Which MIDI note sits at the reference pitch.",
           "Base Note" },
         { "divisions",       "Divisions",       "Tuning", Unit::Count,      1.0f,   100.0f,   12.0f, true,
-          "How many steps the tuning interval is divided into. 12 is the usual semitone scale." },
+          "How many steps the tuning interval is divided into. 12 is the usual semitone scale. Applies only when the Scale is Equal Divisions -- any other scale brings its own steps." },
         { "interval",        "Interval",        "Tuning", Unit::Ratio,      0.0f,    20.0f,    2.0f, true,
-          "The interval the scale repeats over. 2 is the octave; other values give non-octave tunings." },
+          "The interval the scale repeats over. 2 is the octave; other values give non-octave tunings. Applies only when the Scale is Equal Divisions -- any other scale brings its own period." },
     };
     return t;
 }

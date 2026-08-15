@@ -1521,6 +1521,56 @@ int main()
                 check(worstOver == 0, "every name fits on one line, unsquashed", lb);
             }
 
+            // A control a loaded scale takes over must say so rather than
+            // simply not responding.
+            {
+                PanelContent* panel = nullptr;
+                std::function<void(juce::Component*)> findPanel = [&](juce::Component* c) {
+                    for (int k = 0; k < c->getNumChildComponents(); ++k) {
+                        if (auto* p = dynamic_cast<PanelContent*>(c->getChildComponent(k)))
+                            panel = p;
+                        findPanel(c->getChildComponent(k));
+                    }
+                };
+                findPanel(ed.get());
+
+                auto dimmedState = [&](const char* name) {
+                    auto* cell = panel != nullptr ? panel->cellNamed(name) : nullptr;
+                    return cell != nullptr && cell->isDimmed();
+                };
+
+                epmk2::Scale s12;
+                std::string err;
+                epmk2::parseScl(epmk2::builtInScales().front().scl, s12, err);
+                s12.name = epmk2::builtInScales().front().name;
+
+                proc.setScale({});
+                if (panel != nullptr) panel->refreshScale();
+                const bool liveWhenEqual = ! dimmedState("Divisions")
+                                        && ! dimmedState("Interval");
+
+                proc.setScale(s12);
+                if (panel != nullptr) panel->refreshScale();
+                const bool dimWhenScaled = dimmedState("Divisions")
+                                        && dimmedState("Interval");
+                // Base Frequency and Base MIDI Note still mean something under
+                // a scale -- what it is measured from, and where its root sits.
+                const bool baseStaysLive = ! dimmedState("Base Frequency")
+                                        && ! dimmedState("Base MIDI Note");
+
+                proc.setScale({});
+                if (panel != nullptr) panel->refreshScale();
+                const bool liveAgain = ! dimmedState("Divisions");
+
+                char db[128];
+                snprintf(db, sizeof db, "  (equal %s, scaled %s, base %s, back %s)",
+                         liveWhenEqual ? "live" : "DIM", dimWhenScaled ? "dim" : "LIVE",
+                         baseStaysLive ? "live" : "DIM", liveAgain ? "live" : "DIM");
+                check(panel != nullptr && liveWhenEqual && dimWhenScaled
+                          && baseStaysLive && liveAgain,
+                      "a scale greys out the controls it takes over", db);
+            }
+
             // A shortened name has to be recoverable.  The panel says
             // "Distance" because it is only as wide as its longest name; the
             // info bar has a whole strip and says "Pickup Distance", so the
