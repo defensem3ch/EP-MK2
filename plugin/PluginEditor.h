@@ -189,6 +189,11 @@ public:
     void resized() override;
 
     void setVoiceCount(int n);
+    // Ctrl- or Cmd-click on the title writes the current settings to a file.
+    // Deliberately undiscoverable: it exists so a sound arrived at by ear can
+    // reach the source tree without anyone transcribing forty numbers, not as
+    // a feature anyone is meant to find.
+    void mouseDown(const juce::MouseEvent&) override;
     PanelCell* cellNamed(const juce::String& fullName) const;
     // Greys out the controls that something else has taken over: the ones a
     // loaded scale decides, and the ones the tremolo switch turns off.  Runs

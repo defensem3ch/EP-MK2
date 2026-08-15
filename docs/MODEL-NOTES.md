@@ -121,6 +121,23 @@ Worth knowing before designing a preset system around it:
 * **No oversampling**, so the bottom notes alias slightly when the waveshaper
   is driven hard (measured: +1.6 dB in the 800 Hz–4 kHz band at A0).
 
+## Getting a sound back into the source tree
+
+Command- or Ctrl-click the **EP-MK2 title** in the panel header. It writes
+`~/Documents/EP-MK2/dumps/<preset> <timestamp>.txt` and puts the path in the
+info bar.
+
+The file has two halves: every in-scope control in panel units, for reading,
+and underneath it only what differs from the defaults, formatted as an entry
+in `Presets.h`. That second half is the point -- a sound voiced by ear can be
+pasted into the factory table without anyone reading numbers off a screen.
+
+Deliberately undiscoverable, and deliberately not a preset browser. A DAW
+manages user presets better than a plugin can, and this is not for users; it
+is for whoever is maintaining the factory presets. Out-of-scope parameters --
+tuning, master, the wheels -- are excluded, so a pasted entry cannot retune
+the instrument.
+
 ## Preset system sketch
 
 When it is time: a preset is a full set of the 29 parameter values, so the

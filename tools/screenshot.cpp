@@ -14,6 +14,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "../plugin/PluginEditor.h"
+#include "../plugin/PresetDump.h"
 #include "../plugin/PluginProcessor.h"
 
 int main(int argc, char** argv)
@@ -34,6 +35,15 @@ int main(int argc, char** argv)
             if (auto* p = proc.getState().getParameter(argv[i + 1]))
                 p->setValueNotifyingHost(p->convertTo0to1((float) atof(argv[i + 2])));
             i += 2;
+        }
+
+    // --dump prints the settings dump instead of drawing, which is how the
+    // format gets eyeballed without clicking anything.
+    for (int i = 2; i < argc; ++i)
+        if (! strcmp(argv[i], "--dump")) {
+            printf("%s", epmk2::presetdump::text(proc.getState(), "Example")
+                             .toRawUTF8());
+            return 0;
         }
 
     std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());

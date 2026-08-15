@@ -13,6 +13,7 @@
 #include "../plugin/PluginProcessor.h"
 #include "../plugin/PluginEditor.h"
 #include "../plugin/Presets.h"
+#include "../plugin/PresetDump.h"
 
 namespace {
 
@@ -1535,6 +1536,55 @@ int main()
         proc.setScale({});
         check(std::abs(pitchOf(proc, 73) - equal) < 0.5,
               "clearing the scale restores the equal divisions");
+    }
+
+    // ---- the settings dump ------------------------------------------------
+    // The way a sound arrived at by ear gets back into the source tree.  Its
+    // whole value is that the C++ half can be pasted into Presets.h without
+    // anyone reading numbers off a screen, so that is what is checked: not
+    // that a file appeared, but that what is in it would compile and would
+    // say the right thing.
+    {
+        EpMk2Processor proc;
+        proc.setPlayConfigDetails(0, 2, 48000.0, 512);
+        proc.prepareToPlay(48000.0, 512);
+
+        auto* contact = proc.getState().getParameter("hammer_contact");
+        contact->setValueNotifyingHost(contact->convertTo0to1(0.58f));
+        auto* decay = proc.getState().getParameter("tine_decay");
+        decay->setValueNotifyingHost(decay->convertTo0to1(122.0f));
+
+        const auto dump = epmk2::presetdump::text(proc.getState(), "By Ear");
+        const auto entry = dump.fromFirstOccurrenceOf("{ \"By Ear\"", true, false);
+
+        // Only what was actually moved.  A dump listing all fifty as
+        // overrides would be no better than no dump at all.
+        const bool hasChanged = entry.contains("\"hammer_contact\"")
+                             && entry.contains("\"tine_decay\"");
+        int listed = 0;
+        for (const auto& line : juce::StringArray::fromLines(entry))
+            if (line.contains("{ \"") && line.contains("f },"))
+                ++listed;
+
+        // The tuning and the wheels are out of preset scope, so they must not
+        // appear even when they differ -- a pasted entry that set them would
+        // be a preset that retunes the instrument.
+        auto* base = proc.getState().getParameter("bass_freq");
+        base->setValueNotifyingHost(base->convertTo0to1(432.0f));
+        const auto after = epmk2::presetdump::text(proc.getState(), "By Ear");
+
+        char db[160];
+        snprintf(db, sizeof db, "  (%d overrides listed, scope respected: %s)",
+                 listed, after.contains("bass_freq") ? "NO" : "yes");
+        check(hasChanged && listed == 2 && ! after.contains("bass_freq"),
+              "the dump lists what changed, and only that", db);
+
+        // And the readable half has to be there too, since the point of it is
+        // that someone can look at the whole sound rather than the diff.
+        check(dump.contains("everything, in panel units")
+                  && dump.contains("hammer_contact")
+                  && dump.contains("EP-MK2 settings dump"),
+              "and the whole state, for reading");
     }
 
     // ---- what the presets claim to be -------------------------------------

@@ -4,6 +4,7 @@
 #include <EpMk2Fonts.h>
 
 #include "PluginEditor.h"
+#include "PresetDump.h"
 #include "PluginProcessor.h"
 
 using namespace epmk2::params;
@@ -736,6 +737,30 @@ PanelCell* PanelContent::cellNamed(const juce::String& fullName) const
         if (auto* c = section->cellNamed(fullName))
             return c;
     return nullptr;
+}
+
+void PanelContent::mouseDown(const juce::MouseEvent& e)
+{
+    if (! e.mods.isCommandDown() || e.y > kHeaderHeight)
+        return;
+
+    // Only the title itself, so a modified click anywhere else in the header
+    // -- on the scale chooser, say -- still does what it looks like it does.
+    const int titleWidth = juce::GlyphArrangement::getStringWidthInt(
+        juce::Font(panelFont(kTitleFont)), "EP-MK2");
+    if (e.x < 16 || e.x > 16 + titleWidth)
+        return;
+
+    const auto file = epmk2::presetdump::write(proc.getState(),
+                                               proc.getProgramName(proc.getCurrentProgram()));
+    // The info bar, because it is already the panel's way of saying things
+    // and this needs no new furniture.  The path, not "saved", since the
+    // whole point is to go and find the file.
+    if (file != juce::File())
+        showHelp("Settings written", file.getFullPathName());
+    else
+        showHelp("Could not write the settings",
+                 "tried " + epmk2::presetdump::folder().getFullPathName());
 }
 
 void PanelContent::refreshDependents()
