@@ -61,7 +61,7 @@ struct VoiceParams {
     // the Pd model's pickup was too weak to carry a fundamental on its own.
     // Kept as tone controls, not as part of the signal path.
     float tineLevelLin = 0.5012f;
-    float tineSendLin = 0.1f;        // -20 dB
+    float tineSendLin = 0.000141f;   // -77 dB
 
     // tone bar
     // Q of the fundamental *at the reference note* (A4), measured from the
