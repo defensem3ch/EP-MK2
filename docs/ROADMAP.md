@@ -912,6 +912,32 @@ tine's displacement in real units so that the geometry, the excursion and the
 drive are all calibrated against each other rather than tuned independently.
 The second is the real answer and it is a larger piece of work than this was.
 
+## Building and shipping
+
+**Formats.** VST3, LV2, CLAP and Standalone. JUCE 9.0.1 builds all but the
+CLAP -- it knows AAX, AU, AUv3, LV2, Standalone, Unity, VST and VST3 -- so
+that one comes from `clap-juce-extensions`, which wraps the existing
+`AudioProcessor` rather than being a second implementation to keep in step.
+
+`tests/clap_load.cpp` opens the built artefact the way a host would: dlopen,
+walk the factory, instantiate, read the parameter list back. "The file was
+produced" and "a host can load it" are different claims and only the second
+matters.
+
+**Submodules.** JUCE and clap-juce-extensions, so `--recurse-submodules` is
+required to clone. JUCE used to be a *symlink into the frozen MK1 project*,
+which meant a clone of this repository could not be configured at all.
+
+**Not done: Windows and macOS.** Both need to be built on themselves -- there
+is no realistic cross-compile for VST3 or AU -- so both mean CI, and CI means
+a remote, which does not exist yet. macOS also wants
+`CMAKE_OSX_ARCHITECTURES=arm64;x86_64` for a universal binary, and
+distribution there needs codesigning and notarisation, which is an Apple
+Developer account rather than a build step.
+
+**Not done: install rules.** There are none, so the font's OFL licence
+currently travels only in the repository. It has to ship with the binary.
+
 ## Deliberately not doing yet
 
 * **CLAP** — wanted, and MK1 will get it first; nothing here depends on it.

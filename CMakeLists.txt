@@ -11,6 +11,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(JUCE)
 
+# CLAP, which JUCE does not build itself: 9.0.1 knows AAX, AU, AUv3, LV2,
+# Standalone, Unity, VST and VST3, and nothing else.  clap-juce-extensions
+# wraps the existing AudioProcessor, so there is no second implementation to
+# keep in step -- the CLAP is the same plugin as the VST3.
+add_subdirectory(clap-juce-extensions EXCLUDE_FROM_ALL)
+
 # The panel's typeface, embedded rather than looked up on the host.  JUCE's
 # default is whatever the machine calls "sans-serif", which is a different font
 # on every OS -- so without this the plugin looks different everywhere and the
@@ -58,6 +64,12 @@ target_compile_definitions(EPMK2 PUBLIC
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0)
 
+# CLAP_ID is the plugin's identity to a host and must never change once
+# anything has saved a project referring to it.
+clap_juce_extensions_plugin(TARGET EPMK2
+    CLAP_ID "audio.defensem3ch.epmk2"
+    CLAP_FEATURES instrument "electric piano" keyboard synthesizer stereo)
+
 target_link_libraries(EPMK2
     PRIVATE
         EPMK2_fonts
@@ -85,6 +97,19 @@ target_compile_definitions(EPMK2_tests PUBLIC
 target_link_libraries(EPMK2_tests
     PRIVATE EPMK2_fonts juce::juce_audio_utils
     PUBLIC  juce::juce_recommended_config_flags)
+
+# ---------------------------------------------------------------------------
+# Loads the built .clap the way a host would.  Separate from the main test
+# binary because it has to open the *artefact*, not link the code.
+add_executable(EPMK2_claptest tests/clap_load.cpp)
+set_target_properties(EPMK2_claptest PROPERTIES OUTPUT_NAME "epmk2-claptest")
+target_include_directories(EPMK2_claptest
+    PRIVATE clap-juce-extensions/clap-libs/clap/include)
+target_compile_definitions(EPMK2_claptest PUBLIC
+    JUCE_WEB_BROWSER=0          # or juce_gui_extra wants gtk and webkit
+    JUCE_USE_CURL=0
+    JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(EPMK2_claptest PRIVATE juce::juce_audio_processors ${CMAKE_DL_LIBS})
 
 # ---------------------------------------------------------------------------
 # The .scl parser, tested on its own.  No JUCE and no plugin: it is a pure
