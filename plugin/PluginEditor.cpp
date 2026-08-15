@@ -127,6 +127,23 @@ constexpr juce::uint32 lampOff      = 0xff2f2f2f;
 constexpr juce::uint32 pointer      = 0xff2b2b2b;
 }
 
+// The two round things the panel draws, as radii, so they can be lined up
+// against each other rather than by eye.  A knob's body is smaller than its
+// box because the range arc is drawn around it; a lamp is smaller than its box
+// because the glow is drawn outside it and would be clipped otherwise.  Both
+// are centred, so with different radii their bottoms do not meet.
+inline float knobBodyRadius(float size)
+{
+    const float ringWidth = juce::jmax(3.0f, size * 0.11f);
+    const float ringRadius = (size - 4.0f) * 0.5f - ringWidth * 0.5f;
+    return ringRadius - ringWidth * 0.85f;
+}
+
+inline float lampRadius(float size)
+{
+    return size * 0.5f / kGlowReach;
+}
+
 // A vertical gradient, which is all the depth any of this needs.
 inline void fillVertical(juce::Graphics& g, juce::Rectangle<float> r,
                          juce::uint32 top, juce::uint32 bottom)
@@ -247,8 +264,15 @@ void ParamControl::resized()
         // In the knobs' own band, so a toggle sits on the row rather than
         // floating between it and the row below.  It has no value box, and
         // centring it in the space that allows for one dropped it low.
+        // Dropped so the lamp's bottom edge sits level with the bottom of a
+        // knob's body.  Centring the two boxes is not enough: the lamp has a
+        // smaller radius than the knob body, so centred it floats above the
+        // line the knobs on either side of it make.
         button.setBounds(r.removeFromTop(kKnobArea)
-                          .withSizeKeepingCentre(kKnobArea, kKnobArea));
+                          .withSizeKeepingCentre(kKnobArea, kKnobArea)
+                          .translated(0, juce::roundToInt(
+                              knobBodyRadius((float) kKnobArea)
+                              - lampRadius((float) kKnobArea))));
     else
         slider.setBounds(r.reduced(kCellPad, 0));
 }
@@ -385,7 +409,7 @@ void PanelLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y,
     }
 
     // A solid body, so the knob reads as an object rather than an outline.
-    const float bodyRadius = ringRadius - ringWidth * 0.85f;
+    const float bodyRadius = knobBodyRadius(size);
     g.setColour(juce::Colour(col::knobRim));
     g.fillEllipse(juce::Rectangle<float>(bodyRadius * 2.0f + 3.0f,
                                          bodyRadius * 2.0f + 3.0f)
@@ -415,7 +439,7 @@ void PanelLookAndFeel::drawToggleButton(juce::Graphics& g,
     // The lamp is small relative to its component because the glow is drawn
     // *outside* it, and anything past the component's bounds is clipped --
     // which is what made a round glow come out square at the corners.
-    const float radius = size * 0.5f / kGlowReach;
+    const float radius = lampRadius(size);
     auto lamp = juce::Rectangle<float>(radius * 2.0f, radius * 2.0f)
                     .withCentre(bounds.getCentre());
     const auto centre = lamp.getCentre();
