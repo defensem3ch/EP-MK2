@@ -22,7 +22,24 @@ public:
     void mouseEnter(const juce::MouseEvent&) override;
     void mouseExit(const juce::MouseEvent&) override;
 
+    // How many lines this control's name needs at a given cell width, and how
+    // many to actually reserve.  The section sets the second to the largest of
+    // the first across a row, so names start on the same line as their
+    // neighbours without every control paying for the longest name on the
+    // panel.
+    int  labelLinesNeeded(int width) const;
+    void setLabelLines(int lines);
+
 private:
+    // The block the name, knob and value occupy, centred in a cell of fixed
+    // height.  Reserving two lines everywhere kept the knobs the same size but
+    // left a blank line under one-line names, which reads as a gap between the
+    // name and the knob it belongs to -- the opposite of the grouping the cell
+    // background is there to create.  Shrinking the block and centring it
+    // keeps the knobs identical and hands the slack to the row gaps instead.
+    juce::Rectangle<int> contentArea() const;
+
+    int labelLines = 2;
     juce::String label;
     juce::String help;
     bool isToggle;

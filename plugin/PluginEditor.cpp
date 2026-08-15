@@ -1,3 +1,4 @@
+#include <vector>
 #include <limits>
 
 #include <EpMk2Fonts.h>
@@ -95,6 +96,7 @@ inline void fillVertical(juce::Graphics& g, juce::Rectangle<float> r,
 // Room for two lines of label.
 // Two lines of name, so every knob below it is the same size.
 constexpr int   kLabelArea   = 36;
+constexpr int   kLabelLine   = kLabelArea / 2;
 // Space between the section's coloured header and the first row of names.
 // Paired with kSectionBottomPad: the header is a solid block of colour and
 // the names are the first thing under it, so with only a few pixels between
@@ -184,14 +186,41 @@ void ParamControl::paint(juce::Graphics& g)
     // shrinks the font height too.  Forbidding both means every label on the
     // panel is drawn at exactly the same size, and the cell has to be wide
     // enough for the longest word instead.
-    g.drawFittedText(label, getLocalBounds().removeFromTop(kLabelArea).reduced(2, 0),
-                     juce::Justification::centredTop, 2, 1.0f);
+    auto content = contentArea();
+    g.drawFittedText(label, content.removeFromTop(labelLines * kLabelLine).reduced(2, 0),
+                     juce::Justification::centredTop, labelLines, 1.0f);
+}
+
+juce::Rectangle<int> ParamControl::contentArea() const
+{
+    const int used = labelLines * kLabelLine + (kControlHeight - kLabelArea);
+    return getLocalBounds().withSizeKeepingCentre(
+        getWidth(), juce::jmin(getHeight(), used));
+}
+
+int ParamControl::labelLinesNeeded(int width) const
+{
+    // What drawFittedText will do: one line if the whole name fits across the
+    // cell, two if it has to break.  The reduced(2, 0) in paint is why this
+    // measures against four pixels less than the cell.
+    const juce::Font f(panelFont(kLabelFont));
+    return juce::GlyphArrangement::getStringWidthInt(f, label) <= width - 4 ? 1 : 2;
+}
+
+void ParamControl::setLabelLines(int lines)
+{
+    lines = juce::jlimit(1, 2, lines);
+    if (lines == labelLines)
+        return;
+    labelLines = lines;
+    resized();
+    repaint();
 }
 
 void ParamControl::resized()
 {
-    auto r = getLocalBounds();
-    r.removeFromTop(kLabelArea);
+    auto r = contentArea();
+    r.removeFromTop(labelLines * kLabelLine);
     if (isToggle)
         button.setBounds(r.withTrimmedBottom(12).withSizeKeepingCentre(56, 56));
     else
@@ -269,8 +298,27 @@ void ParamSection::resized()
     int i = 0;
     while (i < controls.size() && r.getHeight() > 0) {
         auto row = r.removeFromTop(kControlHeight);
-        for (int c = 0; c < columns && i < controls.size(); ++c, ++i)
-            controls[i]->setBounds(row.removeFromLeft(row.getWidth() / (columns - c)));
+
+        // Widths first, because how many lines a name needs depends on the
+        // width it gets, and the whole row has to agree on a line count before
+        // any of it can be positioned.  A short last row still divides by the
+        // full column count, so its cells stay under the ones above.
+        std::vector<juce::Rectangle<int>> cells;
+        {
+            auto rest = row;
+            for (int c = 0; c < columns && i + c < controls.size(); ++c)
+                cells.push_back(rest.removeFromLeft(rest.getWidth() / (columns - c)));
+        }
+
+        int lines = 1;
+        for (size_t c = 0; c < cells.size(); ++c)
+            lines = juce::jmax(lines,
+                               controls[i + (int) c]->labelLinesNeeded(cells[c].getWidth()));
+
+        for (size_t c = 0; c < cells.size(); ++c, ++i) {
+            controls[i]->setLabelLines(lines);
+            controls[i]->setBounds(cells[c]);
+        }
     }
 }
 
