@@ -205,6 +205,13 @@ ParamControl::ParamControl(juce::AudioProcessorValueTreeState& tree, const Spec&
         // pastel grouping does some work rather than only labelling a header.
         slider.setColour(juce::Slider::rotarySliderFillColourId,
                          sectionColour(spec.section).withMultipliedSaturation(1.15f));
+        // A control that runs either side of zero draws its arc from the
+        // centre out, so the knob shows which way it has gone and by how
+        // much.  Drawn from the left stop, a bipolar control at rest looks
+        // half on.
+        if (spec.min < 0.0f && spec.max > 0.0f)
+            slider.getProperties().set("bipolar", true);
+
         // Frequencies and Q span decades; a linear knob spends nearly all of
         // its travel where nothing interesting happens.
         if (spec.unit == Unit::Hertz || spec.unit == Unit::Q || spec.unit == Unit::Millis)
@@ -591,14 +598,29 @@ void PanelLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y,
     g.strokePath(track, juce::PathStrokeType(ringWidth,
                  juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    // How far it has travelled, in the section's own colour.
-    if (angle > startAngle + 0.01f) {
+    // How far it has travelled, in the section's own colour.  From the
+    // centre for a control that runs either side of zero, from the start for
+    // everything else.
+    const bool bipolar = (bool) slider.getProperties().getWithDefault("bipolar", false);
+    const float from = bipolar ? 0.5f * (startAngle + endAngle) : startAngle;
+
+    if (std::abs(angle - from) > 0.01f) {
         juce::Path value;
         value.addCentredArc(centre.x, centre.y, ringRadius, ringRadius, 0.0f,
-                            startAngle, angle, true);
+                            juce::jmin(from, angle), juce::jmax(from, angle), true);
         g.setColour(slider.findColour(juce::Slider::rotarySliderFillColourId));
         g.strokePath(value, juce::PathStrokeType(ringWidth,
                      juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+
+    if (bipolar) {
+        // A tick at the centre, so rest is a place rather than an absence.
+        const float mid = 0.5f * (startAngle + endAngle);
+        juce::Path detent;
+        detent.addCentredArc(centre.x, centre.y, ringRadius, ringRadius, 0.0f,
+                             mid - 0.02f, mid + 0.02f, true);
+        g.setColour(juce::Colour(0xff8a8a8a));
+        g.strokePath(detent, juce::PathStrokeType(ringWidth));
     }
 
     // A solid body, so the knob reads as an object rather than an outline.

@@ -720,6 +720,13 @@ frequency while it rings is exactly the kind of edit that steps the output.
 
 Range should be a parameter (±2 semitones conventionally).
 
+**The wheel itself is a parameter too**, so it shows on the panel, follows an
+incoming MIDI wheel, and can be driven by hand or automated when there is no
+wheel to hand. It is written once per block rather than per message: a sweep
+is hundreds of messages a second and each write is a host notification, and
+the control only has to end up in the right place. Writing it every block
+regardless would overwrite the knob the moment it was let go of.
+
 **What shipped.** `Voice::retune` moves a sounding note by re-deriving its
 resonators from a base frequency kept separately -- separately because scaling
 `frequency` in place would make the pitch a running product of every wheel

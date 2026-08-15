@@ -1119,6 +1119,7 @@ int main()
             };
             set("trem_on", 1.0f);
             set("vib_depth", 30.0f);
+            set("pitch_bend", 0.5f);
             if (auto* p = proc.getState().getParameter(id))
                 p->setValueNotifyingHost(p->convertTo0to1(value));
 
@@ -1128,8 +1129,6 @@ int main()
             juce::MidiBuffer midi;
             for (int n : { 40, 47, 52, 56, 59, 64 })
                 midi.addEvent(juce::MidiMessage::noteOn(1, n, (juce::uint8) 100), 0);
-            // Wheel hard over, so Bend Range has something to scale.
-            midi.addEvent(juce::MidiMessage::pitchWheel(1, 16383), 1);
 
             // Both channels, laid end to end.  Stereo is the reason: it
             // swings the two in antiphase against a mono tremolo that moves
@@ -1297,6 +1296,48 @@ int main()
                  atRest, wideOpen, stillOpen, shut);
         check(atRest == 0.0f && wideOpen > 90.0f && stillOpen == wideOpen && shut == 0.0f,
               "the mod wheel drives vibrato depth, and it stays", mb);
+    }
+
+    // ---- the pitch wheel, on the panel ------------------------------------
+    // The knob follows an incoming wheel and can drive the bend by itself.
+    // The failure worth guarding against is the second half: if the wheel's
+    // last position were pushed into the parameter every block, the knob
+    // would be overwritten the moment it was let go of and could never be
+    // used by hand.
+    {
+        EpMk2Processor proc;
+        proc.setPlayConfigDetails(0, 2, 48000.0, 256);
+        proc.prepareToPlay(48000.0, 256);
+
+        auto* bend = proc.getState().getParameter("pitch_bend");
+        auto value = [&] { return bend->convertFrom0to1(bend->getValue()); };
+        juce::AudioBuffer<float> buf(2, 256);
+        auto run = [&](juce::MidiBuffer m) { buf.clear(); proc.processBlock(buf, m); };
+
+        run({});
+        const float atRest = value();
+
+        juce::MidiBuffer up;
+        up.addEvent(juce::MidiMessage::pitchWheel(1, 16383), 0);
+        run(std::move(up));
+        const float wheelUp = value();
+
+        juce::MidiBuffer down;
+        down.addEvent(juce::MidiMessage::pitchWheel(1, 0), 0);
+        run(std::move(down));
+        const float wheelDown = value();
+
+        // Now by hand, with no wheel message anywhere near it.
+        bend->setValueNotifyingHost(bend->convertTo0to1(0.5f));
+        for (int i = 0; i < 8; ++i) run({});
+        const float byHand = value();
+
+        char pb[160];
+        snprintf(pb, sizeof pb, "  (rest %.2f, wheel up %.2f, down %.2f, by hand %.2f)",
+                 atRest, wheelUp, wheelDown, byHand);
+        check(atRest == 0.0f && wheelUp > 0.99f && wheelDown < -0.99f
+                  && std::abs(byHand - 0.5f) < 0.01f,
+              "the bend knob follows the wheel, and survives without it", pb);
     }
 
     // ---- bend and vibrato -------------------------------------------------

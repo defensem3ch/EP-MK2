@@ -52,6 +52,7 @@ bool apply(const juce::AudioProcessorValueTreeState& tree,
         else if (id == "tone_level")      p.voice.toneLevelLin = lin;
         else if (id == "tone_send")       p.voice.toneSendLin = lin;
         else if (id == "bend_range")      p.bendRangeSemis = v;
+        else if (id == "pitch_bend")      p.bendWheel = v;
         else if (id == "vib_depth")       p.vibratoDepthCents = v;
         else if (id == "vib_rate")        p.vibratoRateHz = v;
         else if (id == "hammer_level")    p.voice.hammerLevelLin = lin;

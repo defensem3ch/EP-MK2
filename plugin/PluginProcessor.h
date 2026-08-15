@@ -80,9 +80,12 @@ private:
     std::vector<float> lastParamValues;
     int currentProgram = 0;
 
-    // The wheel's own position, which no parameter owns: params::apply
-    // rewrites the whole struct every block, so this is reapplied after it.
-    float bendWheel = 0.0f;
+    // Where MIDI last put the wheel, and what was last pushed into the
+    // parameter from it.  Kept apart so the parameter is only written when
+    // the wheel actually moves -- otherwise every block would overwrite the
+    // knob with a stale wheel position and it could never be used by hand.
+    float pendingBend = 0.0f;
+    float lastBendWritten = 0.0f;
 
     bool ccSustain = false;      // from MIDI CC64
     bool paramSustain = false;   // from the panel toggle

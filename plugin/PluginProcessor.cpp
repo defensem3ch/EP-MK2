@@ -181,8 +181,10 @@ void EpMk2Processor::handleMidi(const juce::MidiMessage& m)
         // 8192 units below centre against 8191 above.  Scaling by the larger
         // would stop the wheel quite reaching its range at the top.
         const int raw = m.getPitchWheelValue() - 8192;
-        bendWheel = raw < 0 ? (float) raw / 8192.0f : (float) raw / 8191.0f;
-        params.bendWheel = bendWheel;
+        // Recorded, not written through.  A wheel sweep is hundreds of
+        // messages a second and each write is a host notification, so the
+        // parameter is updated once at the end of the block instead.
+        pendingBend = raw < 0 ? (float) raw / 8192.0f : (float) raw / 8191.0f;
     }
     else if (m.isAllNotesOff())
         engine.allNotesOff(params);
@@ -224,10 +226,6 @@ void EpMk2Processor::processBlock(juce::AudioBuffer<float>& buffer,
     paramSustain = params.voice.sustainPedal;
     updatePedal();
 
-    // Same shape as the pedal: apply() has just overwritten the whole struct
-    // from the parameter tree, and the wheel is not in it.
-    params.bendWheel = bendWheel;
-
     // Point at whichever scale slot is live, once, so the whole block uses one
     // tuning even if the message thread publishes another halfway through it.
     if (const int live = liveScale.load(std::memory_order_acquire); live >= 0) {
@@ -264,6 +262,18 @@ void EpMk2Processor::processBlock(juce::AudioBuffer<float>& buffer,
         handleMidi(meta.getMessage());
     }
     renderTo(pos, numSamples);
+
+    // The wheel, once, rather than on every message.  Writing it into the
+    // parameter is what puts it on the panel and in the host's automation;
+    // doing that per message would be hundreds of notifications a second
+    // during a sweep, for a control that only has to end up in the right
+    // place.  It also means the knob wins if nothing has moved the wheel:
+    // this only fires when the wheel itself has changed.
+    if (pendingBend != lastBendWritten) {
+        lastBendWritten = pendingBend;
+        if (auto* p = state.getParameter("pitch_bend"))
+            p->setValueNotifyingHost(p->convertTo0to1(pendingBend));
+    }
 
     midi.clear();
 }
