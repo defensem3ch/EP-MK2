@@ -949,7 +949,10 @@ built before. `tests/clap_load.cpp` uses `juce::DynamicLibrary` rather than
 that cannot be built there is no test at all -- and it looks inside the
 bundle on macOS, where a `.clap` is a directory.
 
-**Packaging:** `cmake --install build --prefix dist --component dist`. The
+**Packaging:** `cmake --build build && cmake --install build --prefix dist
+--component dist`. Both halves: `--install` copies what is in the build tree
+and does not build it, so on its own it will happily stage an hour-old binary
+and say nothing. Compare `dist` against `build` if there is any doubt. The
 component matters: JUCE installs its own headers, tools and CMake package
 files, and none of that belongs in a plugin download. It stages the four
 formats beside `LICENSE` and the font's `LICENSE-Liberation.txt` -- the
