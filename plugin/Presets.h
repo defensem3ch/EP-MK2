@@ -143,20 +143,35 @@ inline const std::vector<Preset>& table()
         // a long time and evenly, so decay does not track pitch; and there is
         // no pickup, so the geometry is pulled back and well off axis.
         { "Vibraphone", {
-            { "tine_ratio1",      4.0f },
-            { "tine_ratio2",     10.8f },
-            { "tine_mode3_lvl",-100.0f },
-            { "tine_decay",    1200.0f },
-            { "tine_level",     -14.0f },
-            { "hammer_contact",   4.00f },
-            { "hammer_vel_ctc",   0.60f },
-            { "tone_decay",    3000.0f },
-            { "q_tracking",       0.0f },
-            { "sub_level",     -100.0f },
-            { "pickup_gain",     19.5f },
-            { "pickup_offset",    1.00f },
-            { "pickup_distance",  1.60f },
-            { "pickup_lopass", 1400.0f },
+            // Bars are undercut so the overtones land on 4x and 10x, against
+            // a free bar's natural 6.27 -- which is the whole reason a
+            // vibraphone sounds like a pitch and a marimba sounds like a
+            // knock.  Mode 1 sits at 1.0, so the bar carries its own
+            // fundamental rather than borrowing the tone bar's.
+            { "tine_ratio1",      1.0f },
+            { "tine_ratio2",      4.0f },
+            { "tine_ratio3",     10.0f },
+            { "tine_decay",     923.60f },
+            { "tine_level",     -20.04f },
+            { "tine_send",      -18.07f },
+            // A soft mallet: a long contact is what keeps it pure, and the
+            // hammer's own thud is left just audible under the attack.
+            { "hammer_contact",   0.58f },
+            { "hammer_level",   -51.49f },
+            { "bass_tilt",        0.68f },
+            { "vel_range",        6.61f },
+            { "strike_var",       0.53f },
+            // Bars are cut and tuned one at a time, so no two are quite the
+            // same: this is the highest key variation of any preset here.
+            { "key_var",          0.88f },
+            { "tone_send",      -68.85f },
+            { "tone_decay",    1465.59f },
+            { "tone_release",   208.58f },
+            { "sub_level",      -58.14f },
+            // Almost no pickup nonlinearity, because there is no pickup: a
+            // vibraphone is heard through the air and its resonator tubes.
+            { "pickup_gain",      1.02f },
+            { "pickup_lopass",15277.49f },
             { "buzz_level",    -100.0f },
         }},
 
