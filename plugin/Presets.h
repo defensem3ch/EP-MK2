@@ -244,7 +244,14 @@ inline const std::vector<Preset>& table()
             // Long, because a beat needs time to be heard at all: at 133 the
             // note was gone before the two modes had drifted apart once.
             { "tine_decay",     533.14f },
-            { "tine_level",       0.0f },
+            // Two dB down for headroom.  At 0 the bottom octave peaked
+            // -0.7 dB, closer to the ceiling than anything else here.
+            //
+            // It buys less than it did before this preset was re-voiced: Tone
+            // to Pickup went from -50 dB to -8, so the pickup now carries
+            // most of what is heard and the direct tine is no longer the
+            // whole story.  Half a dB at the bottom, a little more up top.
+            { "tine_level",      -2.0f },
             { "tine_send",      -84.95f },
             { "hammer_contact",   0.50f },
             { "tone_level",      -6.0f },
