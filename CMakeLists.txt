@@ -21,8 +21,8 @@ add_subdirectory(clap-juce-extensions EXCLUDE_FROM_ALL)
 # is every tool and test rather than just the plugin: the processor implements
 # the preset-load capability, and that base class is declared in them.
 #
-# The submodule's own targets rather than a hand-written include path.  Doing
-# it by hand meant chasing one missing header into the next -- clap.h, then
+# The submodule's own targets rather than listing include paths here.  Doing
+# that meant chasing one missing header into the next -- clap.h, then
 # clap-juce-extensions.h, then clap/helpers/plugin.hh -- while the stale test
 # binaries kept reporting success.
 add_library(EPMK2_clap_headers INTERFACE)

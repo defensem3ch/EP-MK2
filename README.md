@@ -14,8 +14,8 @@ a note that is not identical every time you play it.
 
 * **EP-MK1** — Pure Data physical model by Miguel Moreno (Mike Moreno Audio),
   GPL-3.0.
-* **EP-MK1 JUCE port** — hand-written C++ reimplementation, verified against the
-  Pd patch and against an hvcc/Heavy build of it. Bands agree within 0.1–0.2 dB.
+* **EP-MK1 JUCE port** — a C++ reimplementation, verified against the Pd patch
+  and against an hvcc/Heavy build of it. Bands agree within 0.1–0.2 dB.
 * **EP-MK2** — this project, by **defensem3ch**. Same licence and the same
   lineage, but the model has changed shape: a hammer with a contact time
   instead of a period, resonators normalised so decay and level are
