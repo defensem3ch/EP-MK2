@@ -3,16 +3,20 @@ name: build
 # Windows and macOS builds are the whole point of this file: VST3, AU and CLAP
 # all have to be compiled on the platform they run on, so there is no way to
 # produce them from the Linux machine this is developed on.
+# Not on every push.  A private repository has a monthly minute allowance and
+# this matrix eats it: macOS bills at *ten times* the Linux rate and Windows at
+# twice, so one three-platform run costs far more than its wall-clock suggests.
+# Building on every commit spent the month's allowance in a day.
+#
+# Run it by hand from the Actions tab when a change could plausibly break a
+# platform this machine cannot test -- anything touching CMake, the submodules,
+# threading or file paths -- and on a release tag, which is when the artefacts
+# are actually wanted.  Everything else is caught by building locally.
 on:
   push:
-    branches: [main]
     tags: ['v*']
-  pull_request:
   workflow_dispatch:
 
-# A push that supersedes an earlier one cancels it.  Four runs of a
-# three-platform matrix were queued at once on the first day, and macOS
-# minutes bill at ten times Linux.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

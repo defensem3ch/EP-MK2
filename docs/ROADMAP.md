@@ -928,6 +928,14 @@ matters.
 required to clone. JUCE used to be a *symlink into the frozen MK1 project*,
 which meant a clone of this repository could not be configured at all.
 
+**Not on every push.** A private repository has a monthly Actions allowance
+and this matrix eats it: macOS bills at ten times the Linux rate, Windows at
+twice. Building on every commit spent a month's allowance in a day. It runs on
+a release tag and by hand from the Actions tab -- worth doing when a change
+could plausibly break a platform this machine cannot test, which means CMake,
+the submodules, threading or file paths. Making the repository public would
+restore unlimited minutes, if that ever becomes the right trade.
+
 **Windows and macOS** are built by `.github/workflows/build.yml`, because
 VST3, AU and CLAP all have to be compiled on the platform they run on and
 there is no realistic cross-compile. macOS builds universal

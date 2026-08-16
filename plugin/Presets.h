@@ -90,51 +90,68 @@ inline const std::vector<Preset>& table()
         // harmonics -- so the tine sits close to the magnetic axis, which is a
         // low offset, not a high one.  No tone bar means no sub-fundamental.
         { "Wurlitzer", {
+            { "hammer_contact",   0.30f },
+            // A flat cantilever, not a rod: its ideal mode ratios are 6.27
+            // and 17.55, against the Rhodes' measured 7.1 and 20.4.
             { "tine_ratio1",      6.27f },
             { "tine_ratio2",     17.55f },
             { "tine_decay",     180.0f },
-            { "tine_send",      -58.0f },
-            { "tine_level",     -12.0f },
-            { "hammer_contact",   0.30f },
-            { "tone_decay",     900.0f },
-            { "sub_level",     -100.0f },
-            // 0.40 was measured putting the *odd* harmonics 11 dB above the
-            // even ones -- further from a Wurlitzer than the Rhodes is, and
-            // the opposite of what the comment above claims.  0.15 puts the
-            // evens 3.5 dB up, which is the bark.  Below about 0.10 the
-            // second harmonic reaches the fundamental and the note stops
-            // having a pitch.
-            { "pickup_offset",    0.15f },
-            // The drive stays high, because a Wurlitzer's nonlinearity is the
-            // point; the level comes off the output instead.
-            { "pickup_gain",      8.0f },
+            { "tine_level",     -50.27f },
+            { "tine_send",      -32.38f },
+            // The reed *into* the pickup, and hard: a Wurlitzer's bark is its
+            // electrostatic pickup being driven, so the tone bar path is
+            // pushed above unity rather than trimmed.
+            { "tone_send",        6.76f },
+            { "tone_decay",    1314.07f },
+            { "sub_level",      -63.35f },
+            // Low offset is the bark.  The reed sits near the pickup's
+            // magnetic axis, where the response is even-order, which is what
+            // separates this from a Rhodes more than any other control here.
+            { "pickup_offset",    0.21f },
+            { "pickup_distance",  0.68f },
+            { "pickup_gain",     10.12f },
             { "pickup_level",    -6.0f },
-            { "pickup_distance",  0.55f },
-            { "pickup_lopass", 3000.0f },
+            { "pickup_lopass", 3879.95f },
+            { "buzz_level",     -16.53f },
+            { "buzz_phase",       0.0f },
         }},
 
         // Plucked against a fret: harmonic, not inharmonic, so the modes go to
         // integers.  A plectrum is a very short contact, the body is small and
         // dies fast, and there is no tone bar sub.
         { "Clav", {
+            // Plucked against a fret, so a very short contact and a strong
+            // velocity effect on it -- a clav's bite is how hard it was hit,
+            // more than on anything else here.
+            { "hammer_contact",   0.19f },
+            { "hammer_vel_ctc",   2.17f },
+            { "hammer_level",   -53.98f },
+            // Not integers.  A string stopped at a fret is not quite an ideal
+            // string, and 4.58 and 8.08 against 2.0 are what stops this
+            // sounding like an organ.  Mode damping above 1 kills the upper
+            // two quickly, which is the pluck rather than the tone.
             { "tine_ratio1",      2.0f },
-            { "tine_ratio2",      3.0f },
-            { "tine_ratio3",      4.0f },
-            { "tine_decay",     700.0f },
+            { "tine_ratio2",      4.58f },
+            { "tine_ratio3",      8.08f },
+            { "tine_mode_damp",   1.08f },
+            { "tine_decay",     344.59f },
+            { "tine_level",     -38.86f },
             { "tine_send",      -52.0f },
-            { "tine_level",      -8.0f },
-            { "hammer_contact",   0.12f },
-            { "tone_decay",     600.0f },
-            { "tone_release",    20.0f },
+            { "tone_decay",     494.11f },
+            { "tone_release",    37.74f },
+            { "q_tracking",       0.0f },
             { "sub_level",     -100.0f },
-            { "pickup_gain",     16.0f },
-            { "pickup_offset",    0.65f },
-            { "pickup_lopass", 7000.0f },
+            { "noteoff_level",   -9.12f },
+            // The pickup driven to its limit, well off axis, with the buzz
+            // just present: this is the one preset where the nonlinearity is
+            // most of the sound rather than a colouring of it.
+            { "pickup_gain",     24.0f },
             { "pickup_level",     0.0f },
-            // A plucked string has no buzzing pickup behind it.  Left in, the
-            // fourth-power term ran away on the very short contact this uses
-            // and pinned every note against the limiter.
-            { "buzz_level",    -100.0f },
+            { "pickup_offset",    1.29f },
+            { "pickup_distance",  0.59f },
+            { "pickup_lopass", 9344.17f },
+            { "buzz_level",     -32.01f },
+            { "buzz_phase",       0.0f },
         }},
 
         // Bars are undercut so the first overtone is exactly 4x (a free bar's
