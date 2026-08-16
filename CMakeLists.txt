@@ -4,7 +4,10 @@ cmake_minimum_required(VERSION 3.22)
 # still use M_PI, and this is for them.
 add_compile_definitions(_USE_MATH_DEFINES)
 
-project(EPMK2 VERSION 0.1.0 LANGUAGES C CXX)
+# The single place the version is declared.  juce_add_plugin below passes no
+# VERSION of its own, so JUCE takes it from here and stamps it into the VST3
+# metadata, the LV2 .ttl, the CLAP descriptor and the standalone's About box.
+project(EPMK2 VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

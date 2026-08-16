@@ -136,3 +136,52 @@ jobs:
           name: EP-MK2-${{ matrix.name }}
           path: dist/
           if-no-files-found: error
+
+  # Artifacts from the job above expire and need a GitHub login to fetch, so
+  # they cannot be the download.  This turns them into release assets, but only
+  # for a tag: on a workflow_dispatch run there is nothing to attach them to.
+  #
+  # `needs: build` is deliberately all three platforms.  The matrix sets
+  # fail-fast: false so a broken platform still lets the others report, but a
+  # release missing one of them is worse than no release at all, so this job is
+  # skipped entirely unless every platform succeeded.
+  release:
+    name: release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # download-artifact puts each artifact in a directory named after it, so
+      # artifacts/EP-MK2-linux/ holds what dist/ held on the runner that built
+      # it.  Zipping from inside that directory keeps the archive rooted at
+      # VST3/, CLAP/, LV2/ rather than burying them under a parent folder.
+      #
+      # -y because the LV2 and VST3 bundles contain symlinks on macOS, and
+      # without it zip stores what they point at: the same binary several
+      # times over, in an archive the host then refuses to load.
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            (cd "$dir" && zip -r -y "$GITHUB_WORKSPACE/release/$name.zip" .)
+          done
+          ls -l release
+
+      # Draft, because no Windows or macOS build of this plugin has ever been
+      # published and the assets are worth opening before anyone downloads
+      # them.  Publishing is one button in the Releases tab; delete this line
+      # once a tag has been through here cleanly and it will go out directly.
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.zip
+          generate_release_notes: true
+          draft: true
