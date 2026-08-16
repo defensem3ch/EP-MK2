@@ -230,26 +230,27 @@ inline const std::vector<Preset>& table()
         // that control existed the pickup carried the bar at unity whatever
         // Tone Direct said, so this sound could not have been reached at all.
         { "Gamelan", {
-            { "hammer_contact",   0.50f },
-            { "tine_ratio1",      2.52f },
-            { "tine_ratio2",      8.41f },
-            { "tine_ratio3",      4.88f },
-            { "tine_decay",     133.27f },
-            // Two dB down, for headroom: at 0 this peaked -1.7 dB at the
-            // bottom of the keyboard where nothing else here goes above
-            // -3.2, and a preset with nothing left in its lowest octave has
-            // nowhere to go when someone leans on it.
+            // Two modes a whisker apart -- 3.63 and 3.75, about three percent
+            // -- so they beat against each other.  That is the sound: struck
+            // bronze shimmers because its partials are close and not quite
+            // equal, and a single mode there would just be a tone.  At A2 the
+            // pair is 299 and 309 Hz, so it beats about ten times a second.
             //
-            // Here rather than on Pickup Level, which does nothing at all in
-            // this preset: both sends are nearly shut, so the pickup carries
-            // almost none of this sound and turning it down changes the
-            // output by exactly zero.  The direct tine *is* the instrument
-            // here.
-            { "tine_level",      -2.0f },
+            // The third at 4.88 is far enough away to be heard as a separate
+            // partial rather than joining the beat.
+            { "tine_ratio1",      3.6338f },
+            { "tine_ratio2",      3.7520f },
+            { "tine_ratio3",      4.8791f },
+            // Long, because a beat needs time to be heard at all: at 133 the
+            // note was gone before the two modes had drifted apart once.
+            { "tine_decay",     533.14f },
+            { "tine_level",       0.0f },
             { "tine_send",      -84.95f },
+            { "hammer_contact",   0.50f },
             { "tone_level",      -6.0f },
-            { "tone_send",      -50.35f },
+            { "tone_send",       -8.08f },
             { "tone_decay",     234.55f },
+            { "tone_release",   199.54f },
             { "sub_level",      -60.0f },
             { "pickup_gain",     12.0f },
             { "pickup_offset",    0.70f },
