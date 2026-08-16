@@ -59,7 +59,12 @@ juce_add_plugin(EPMK2
     BUNDLE_ID               "audio.defensem3ch.epmk2"
     PLUGIN_MANUFACTURER_CODE Dfm3
     PLUGIN_CODE             Epm2
-    FORMATS                 VST3 LV2 Standalone
+    # AU is macOS-only and Logic and GarageBand load nothing else.  Listing it
+    # here on every platform is safe: JUCE intersects this list with the kinds
+    # the platform supports, so the Linux and Windows builds drop it silently
+    # rather than failing.  AUv3 is deliberately absent -- it needs the Xcode
+    # generator, and the macOS job does not use one.
+    FORMATS                 AU VST3 LV2 Standalone
     LV2URI                  "urn:defensem3ch:epmk2"
     IS_SYNTH                TRUE
     NEEDS_MIDI_INPUT        TRUE
