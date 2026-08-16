@@ -1,19 +1,17 @@
 build/
-# Credentials, in case one ever lands here again.  One did, briefly, and the
-# only thing between it and a push was a pattern in this file -- it lives in
-# ~/.config/epmk2 now, which is somewhere git will never walk.
+dist/
+
+# Credentials never belong in the tree.
 *token*
 dumps/
 *.pem
-# JUCE is a submodule now, not a symlink into the MK1 project next door.
-# It was the latter, which meant this could not be built without a frozen
-# project present, and a clone got no JUCE at all.
+
+# JUCE is a submodule, not a symlink into a neighbouring project.
 *.MID
 *.mid
 
-# Reference material we are allowed to analyse but not redistribute:
-# commercial sample libraries and paywalled papers.  Analysis *results*
-# are ours and may be committed.
+# Reference material we may analyse but not redistribute.
+# Analysis *results* are ours and may be committed.
 *.xrni
 samples/
 research/
